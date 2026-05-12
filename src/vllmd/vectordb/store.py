@@ -99,8 +99,13 @@ class VectorStore:
             return 0
         file_id = _file_id(path)
         source = source_label or str(path)
-        metadatas = [{"source": source, "chunk": i, "file_id": file_id} for i in range(len(chunks))]
-        return _ingest_chunks(self._collection(COLLECTION_DOCUMENTS), chunks, file_id, metadatas, embedder)
+        metadatas = [
+            {"source": source, "chunk": i, "file_id": file_id}
+            for i in range(len(chunks))
+        ]
+        return _ingest_chunks(
+            self._collection(COLLECTION_DOCUMENTS), chunks, file_id, metadatas, embedder
+        )
 
     # ------------------------------------------------------------------
     # Code
@@ -116,8 +121,13 @@ class VectorStore:
         file_id = _file_id(path)
         rel_path = str(path.relative_to(root)) if root else str(path)
         language = path.suffix.lstrip(".") or "unknown"
-        metadatas = [{"filepath": rel_path, "language": language, "chunk": i, "file_id": file_id} for i in range(len(chunks))]
-        return _ingest_chunks(self._collection(COLLECTION_CODE), chunks, file_id, metadatas, embedder)
+        metadatas = [
+            {"filepath": rel_path, "language": language, "chunk": i, "file_id": file_id}
+            for i in range(len(chunks))
+        ]
+        return _ingest_chunks(
+            self._collection(COLLECTION_CODE), chunks, file_id, metadatas, embedder
+        )
 
     def ingest_code_dir(
         self,
