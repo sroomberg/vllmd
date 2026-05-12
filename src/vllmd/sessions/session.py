@@ -9,6 +9,10 @@ from pathlib import Path
 DEFAULT_SESSIONS_DIR = Path.home() / ".vllmd" / "sessions"
 
 
+def _parse_messages(raw: list[dict]) -> "list[Message]":
+    return [Message(**m) for m in raw]
+
+
 @dataclass
 class Message:
     role: str
@@ -45,7 +49,7 @@ class Session:
         if not path.exists():
             raise FileNotFoundError(f"Session '{session_id}' not found.")
         data = json.loads(path.read_text())
-        messages = [Message(**m) for m in data.pop("messages", [])]
+        messages = _parse_messages(data.pop("messages", []))
         return cls(**data, messages=messages)
 
     @classmethod
@@ -56,7 +60,7 @@ class Session:
         for path in sorted(sessions_dir.glob("*.json")):
             try:
                 data = json.loads(path.read_text())
-                messages = [Message(**m) for m in data.pop("messages", [])]
+                messages = _parse_messages(data.pop("messages", []))
                 sessions.append(cls(**data, messages=messages))
             except Exception:
                 continue
