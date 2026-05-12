@@ -56,6 +56,21 @@ def _file_id(path: Path) -> str:
     return hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:16]
 
 
+def _ingest_chunks(
+    col: chromadb.Collection,
+    chunks: list[str],
+    file_id: str,
+    metadatas: list[dict],
+    embedder: Any,
+) -> int:
+    embeddings = embedder(chunks)
+    ids = [f"{file_id}:{i}" for i in range(len(chunks))]
+    with contextlib.suppress(Exception):
+        col.delete(where={"file_id": file_id})
+    col.add(ids=ids, embeddings=embeddings, documents=chunks, metadatas=metadatas)
+    return len(chunks)
+
+
 class VectorStore:
     def __init__(self, db_path: Path) -> None:
         db_path.mkdir(parents=True, exist_ok=True)
@@ -82,23 +97,10 @@ class VectorStore:
         chunks = _chunk_text(text)
         if not chunks:
             return 0
-
         file_id = _file_id(path)
         source = source_label or str(path)
-        col = self._collection(COLLECTION_DOCUMENTS)
-
-        embeddings = embedder(chunks)
-        ids = [f"{file_id}:{i}" for i in range(len(chunks))]
-        metadatas = [
-            {"source": source, "chunk": i, "file_id": file_id}
-            for i in range(len(chunks))
-        ]
-
-        with contextlib.suppress(Exception):
-            col.delete(where={"file_id": file_id})
-
-        col.add(ids=ids, embeddings=embeddings, documents=chunks, metadatas=metadatas)
-        return len(chunks)
+        metadatas = [{"source": source, "chunk": i, "file_id": file_id} for i in range(len(chunks))]
+        return _ingest_chunks(self._collection(COLLECTION_DOCUMENTS), chunks, file_id, metadatas, embedder)
 
     # ------------------------------------------------------------------
     # Code
@@ -111,24 +113,11 @@ class VectorStore:
         chunks = _chunk_text(text)
         if not chunks:
             return 0
-
         file_id = _file_id(path)
         rel_path = str(path.relative_to(root)) if root else str(path)
         language = path.suffix.lstrip(".") or "unknown"
-        col = self._collection(COLLECTION_CODE)
-
-        embeddings = embedder(chunks)
-        ids = [f"{file_id}:{i}" for i in range(len(chunks))]
-        metadatas = [
-            {"filepath": rel_path, "language": language, "chunk": i, "file_id": file_id}
-            for i in range(len(chunks))
-        ]
-
-        with contextlib.suppress(Exception):
-            col.delete(where={"file_id": file_id})
-
-        col.add(ids=ids, embeddings=embeddings, documents=chunks, metadatas=metadatas)
-        return len(chunks)
+        metadatas = [{"filepath": rel_path, "language": language, "chunk": i, "file_id": file_id} for i in range(len(chunks))]
+        return _ingest_chunks(self._collection(COLLECTION_CODE), chunks, file_id, metadatas, embedder)
 
     def ingest_code_dir(
         self,
