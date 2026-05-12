@@ -25,6 +25,14 @@ def _resolve_sessions_dir(override: Optional[Path]) -> Path:
     return override or DEFAULT_SESSIONS_DIR
 
 
+def _load_session_or_exit(session_id: str, sessions_dir: Path) -> Session:
+    try:
+        return Session.load(session_id, sessions_dir)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1) from e
+
+
 def _resolve_endpoint_and_model(
     endpoint: Optional[str],
     model_id: Optional[str],
@@ -199,11 +207,7 @@ def chat_cmd(
 ) -> None:
     """Send a single message in a session and print the response."""
     sdir = _resolve_sessions_dir(sessions_dir)
-    try:
-        session = Session.load(session_id, sdir)
-    except FileNotFoundError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1) from e
+    session = _load_session_or_exit(session_id, sdir)
 
     try:
         response = chat(session, message, n_context=n_context, max_tokens=max_tokens)
@@ -239,11 +243,7 @@ def attach(
     Commands: /history, /context <query>, /reset, /exit
     """
     sdir = _resolve_sessions_dir(sessions_dir)
-    try:
-        session = Session.load(session_id, sdir)
-    except FileNotFoundError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1) from e
+    session = _load_session_or_exit(session_id, sdir)
 
     ctx_status = "on" if session.embedding_model else "off"
     console.print(
@@ -324,12 +324,7 @@ def history(
 ) -> None:
     """Print the conversation history for a session."""
     sdir = _resolve_sessions_dir(sessions_dir)
-    try:
-        session = Session.load(session_id, sdir)
-    except FileNotFoundError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1) from e
-
+    session = _load_session_or_exit(session_id, sdir)
     _print_history(session, last=last or None)
 
 
@@ -346,12 +341,7 @@ def clear(
 ) -> None:
     """Clear the conversation history for a session (keeps session config)."""
     sdir = _resolve_sessions_dir(sessions_dir)
-    try:
-        session = Session.load(session_id, sdir)
-    except FileNotFoundError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1) from e
-
+    session = _load_session_or_exit(session_id, sdir)
     count = session.message_count()
     session.clear_history()
     session.save(sdir)
@@ -373,12 +363,7 @@ def delete(
 ) -> None:
     """Delete a session and its metadata."""
     sdir = _resolve_sessions_dir(sessions_dir)
-    try:
-        session = Session.load(session_id, sdir)
-    except FileNotFoundError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1) from e
-
+    session = _load_session_or_exit(session_id, sdir)
     session.delete(sdir)
     console.print(f"[green]Session '{session_id}' deleted.[/green]")
 
