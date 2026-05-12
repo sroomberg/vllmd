@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .embeddings import embed
+from .embeddings import embed, make_embedder
 from .store import (
     COLLECTION_CODE,
     COLLECTION_CONVERSATIONS,
@@ -22,13 +22,6 @@ db_app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
-
-
-def _embedder(endpoint: str, model_id: str):
-    def _embed(texts: list[str]) -> list[list[float]]:
-        return embed(endpoint, model_id, texts)
-
-    return _embed
 
 
 @db_app.command()
@@ -49,7 +42,7 @@ def ingest(
     ] = Path("./vectordb"),
 ) -> None:
     """Ingest documents or code files into the vector database."""
-    embedder = _embedder(endpoint, model)
+    embedder = make_embedder(endpoint, model)
     store = VectorStore(db_path)
 
     if type == "code":
@@ -162,7 +155,7 @@ def history(
     ] = Path("./vectordb"),
 ) -> None:
     """Store a conversation message in the history collection."""
-    embedder = _embedder(endpoint, model)
+    embedder = make_embedder(endpoint, model)
     store = VectorStore(db_path)
     msg_id = store.add_history(session, role, content, embedder)
     console.print(
@@ -191,7 +184,7 @@ def summarize(
     ] = Path("./vectordb"),
 ) -> None:
     """Replace a session's conversation history with an abridged summary."""
-    embedder = _embedder(endpoint, model)
+    embedder = make_embedder(endpoint, model)
     store = VectorStore(db_path)
     store.replace_history_with_summary(session, summary, embedder)
     console.print(f"[green]Session '{session}' history replaced with summary.[/green]")

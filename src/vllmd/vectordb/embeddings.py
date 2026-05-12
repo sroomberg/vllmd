@@ -24,3 +24,9 @@ def embed(endpoint: str, model_id: str, texts: list[str]) -> list[list[float]]:
 
 def embed_one(endpoint: str, model_id: str, text: str) -> list[float]:
     return embed(endpoint, model_id, [text])[0]
+
+
+def make_embedder(endpoint: str, model_id: str):
+    def _embed(texts: list[str]) -> list[list[float]]:
+        return embed(endpoint, model_id, texts)
+    return _embed

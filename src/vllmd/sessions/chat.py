@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..vectordb.embeddings import _post_json, embed
+from ..vectordb.embeddings import _post_json, embed, make_embedder
 from ..vectordb.store import COLLECTION_CODE, COLLECTION_DOCUMENTS, VectorStore
 from .session import Session
 
@@ -104,10 +104,7 @@ def _complete(
 def _store_history(session: Session, user_message: str, response: str) -> None:
     try:
         store = VectorStore(Path(session.db_path))
-
-        def embedder(texts: list[str]) -> list[list[float]]:
-            return embed(session.endpoint, session.embedding_model, texts)
-
+        embedder = make_embedder(session.endpoint, session.embedding_model)
         store.add_history(session.id, "user", user_message, embedder)
         store.add_history(session.id, "assistant", response, embedder)
     except Exception:
