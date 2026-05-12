@@ -1,10 +1,8 @@
 """Chat function: assembles context and calls the vLLM completions endpoint."""
 
-import json
-import urllib.request
 from pathlib import Path
 
-from ..vectordb.embeddings import embed
+from ..vectordb.embeddings import _post_json, embed
 from ..vectordb.store import COLLECTION_CODE, COLLECTION_DOCUMENTS, VectorStore
 from .session import Session
 
@@ -95,16 +93,11 @@ def _retrieve_context(session: Session, query: str, n: int) -> str:
 def _complete(
     endpoint: str, model_id: str, messages: list[dict], max_tokens: int
 ) -> str:
-    payload = json.dumps(
-        {"model": model_id, "messages": messages, "max_tokens": max_tokens}
-    ).encode()
-    req = urllib.request.Request(
+    data = _post_json(
         f"{endpoint.rstrip('/')}/v1/chat/completions",
-        data=payload,
-        headers={"Content-Type": "application/json"},
+        {"model": model_id, "messages": messages, "max_tokens": max_tokens},
+        TIMEOUT,
     )
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        data = json.loads(resp.read())
     return data["choices"][0]["message"]["content"]
 
 
