@@ -60,6 +60,4 @@ def get_session_store() -> BaseSessionStore:
             region=s3_cfg.get("region", "us-east-1"),
         )
 
-    raise ValueError(
-        f"Unknown sessions store {backend!r}. Expected 'local' or 's3'."
-    )
+    raise ValueError(f"Unknown sessions store {backend!r}. Expected 'local' or 's3'.")

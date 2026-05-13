@@ -48,9 +48,7 @@ class S3VectorStore(BaseVectorStore):
         from botocore.exceptions import ClientError
 
         try:
-            resp = self._client.get_object(
-                Bucket=self._bucket, Key=self._archive_key
-            )
+            resp = self._client.get_object(Bucket=self._bucket, Key=self._archive_key)
         except ClientError as e:
             if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
                 return
@@ -60,7 +58,7 @@ class S3VectorStore(BaseVectorStore):
             try:
                 tar.extractall(self._cache_dir, filter="data")
             except TypeError:
-                tar.extractall(self._cache_dir)  # noqa: S202 — Python < 3.11.4
+                tar.extractall(self._cache_dir)
 
     def _sync_to_s3(self) -> None:
         buf = io.BytesIO()

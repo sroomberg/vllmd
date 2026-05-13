@@ -55,9 +55,7 @@ class S3SessionStore(BaseSessionStore):
                 if not obj["Key"].endswith(".json"):
                     continue
                 try:
-                    resp = self._client.get_object(
-                        Bucket=self._bucket, Key=obj["Key"]
-                    )
+                    resp = self._client.get_object(Bucket=self._bucket, Key=obj["Key"])
                     data = json.loads(resp["Body"].read())
                     messages = _parse_messages(data.pop("messages", []))
                     sessions.append(Session(**data, messages=messages))

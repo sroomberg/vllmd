@@ -7,10 +7,10 @@ from .providers.s3 import S3SessionStore
 from .session import Message, Session
 
 __all__ = [
-    "Message",
-    "Session",
     "BaseSessionStore",
     "LocalSessionStore",
+    "Message",
     "S3SessionStore",
+    "Session",
     "get_session_store",
 ]

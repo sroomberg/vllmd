@@ -11,15 +11,15 @@ if TYPE_CHECKING:
 
 class BaseSessionStore(ABC):
     @abstractmethod
-    def save(self, session: "Session") -> None:
+    def save(self, session: Session) -> None:
         """Persist session data."""
 
     @abstractmethod
-    def load(self, session_id: str) -> "Session":
+    def load(self, session_id: str) -> Session:
         """Load a session by ID. Raises FileNotFoundError if not found."""
 
     @abstractmethod
-    def list_all(self) -> "list[Session]":
+    def list_all(self) -> list[Session]:
         """Return all stored sessions, sorted by ID."""
 
     @abstractmethod

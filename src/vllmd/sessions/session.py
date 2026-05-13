@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 DEFAULT_SESSIONS_DIR = Path.home() / ".vllmd" / "sessions"
 
 
-def _parse_messages(raw: list[dict]) -> "list[Message]":
+def _parse_messages(raw: list[dict]) -> list[Message]:
     return [Message(**m) for m in raw]
 
 
@@ -40,18 +40,18 @@ class Session:
     # Persistence
     # ------------------------------------------------------------------
 
-    def save(self, store: "BaseSessionStore") -> None:
+    def save(self, store: BaseSessionStore) -> None:
         store.save(self)
 
     @classmethod
-    def load(cls, session_id: str, store: "BaseSessionStore") -> "Session":
+    def load(cls, session_id: str, store: BaseSessionStore) -> Session:
         return store.load(session_id)
 
     @classmethod
-    def list_all(cls, store: "BaseSessionStore") -> "list[Session]":
+    def list_all(cls, store: BaseSessionStore) -> list[Session]:
         return store.list_all()
 
-    def delete(self, store: "BaseSessionStore") -> None:
+    def delete(self, store: BaseSessionStore) -> None:
         store.delete(self.id)
 
     # ------------------------------------------------------------------
@@ -68,7 +68,7 @@ class Session:
         *,
         system_prompt: str = "",
         embedding_model: str = "",
-    ) -> "Session":
+    ) -> Session:
         return cls(
             id=session_id,
             endpoint=endpoint,

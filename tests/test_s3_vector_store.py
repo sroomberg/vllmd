@@ -5,8 +5,6 @@ import tarfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from vllmd.vectordb.providers.s3 import S3VectorStore
 
 

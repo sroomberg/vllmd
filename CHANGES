@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.2.1 — 2026-05-13
+- Fix ruff lint errors introduced in v1.2.0: remove redundant string quotes from type annotations (UP037), sort `__all__` (RUF022), remove unused `noqa` directive (RUF100), remove unused `pytest` import (F401)
+
 ## v1.2.0 — 2026-05-13
 - Add pluggable session storage: `BaseSessionStore` ABC with `LocalSessionStore` (existing behaviour) and `S3SessionStore` (boto3)
 - Add `S3VectorStore`: wraps `LocalVectorStore` (ChromaDB) and syncs the database archive to/from S3 after each write
