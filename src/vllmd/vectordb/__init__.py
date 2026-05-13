@@ -1,5 +1,10 @@
-"""Local context vector database backed by ChromaDB."""
+"""Vector store backends for vllmd."""
 
-from .store import VectorStore
+from .aws import AWSVectorStore
+from .base import BaseVectorStore
+from .local import LocalVectorStore
 
-__all__ = ["VectorStore"]
+# LocalVectorStore is the default backend.
+VectorStore = LocalVectorStore
+
+__all__ = ["AWSVectorStore", "BaseVectorStore", "LocalVectorStore", "VectorStore"]

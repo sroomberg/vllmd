@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.0 — 2026-05-12
+- Add `BaseVectorStore` ABC defining the full vector store interface
+- Add `AWSVectorStore` backed by Amazon OpenSearch Service (`pip install 'vllmd[aws]'`)
+- Refactor `VectorStore` → `LocalVectorStore(BaseVectorStore)`; `VectorStore` alias kept for backward compatibility
+- Move shared helpers (`_chunk_text`, `_file_id`) and constants to `vectordb.base`
+- Add `[aws]` optional extras: `opensearch-py>=2.0`, `boto3>=1.34`
+
 ## v1.0.1 — 2026-05-12
 - Deduplicate message deserialization via `_parse_messages()` in `load()` and `list_all()`
 - Move embedder factory to `embeddings.make_embedder()`, remove duplicate closures in CLI and chat
