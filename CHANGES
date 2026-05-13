@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.2.2 — 2026-05-13
+- Fix CI: install `.[dev,aws]` so boto3/botocore are available for S3 provider tests
+
 ## v1.2.1 — 2026-05-13
 - Fix ruff lint errors introduced in v1.2.0: remove redundant string quotes from type annotations (UP037), sort `__all__` (RUF022), remove unused `noqa` directive (RUF100), remove unused `pytest` import (F401)
 
