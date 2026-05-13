@@ -1,6 +1,6 @@
 """Backward-compatible re-exports from the vectordb package."""
 
-from .base import (
+from .providers.base import (
     CHUNK_OVERLAP,
     CHUNK_SIZE,
     CODE_EXTENSIONS,
@@ -9,7 +9,7 @@ from .base import (
     COLLECTION_DOCUMENTS,
     BaseVectorStore,
 )
-from .local import LocalVectorStore
+from .providers.local import LocalVectorStore
 
 # LocalVectorStore is the default; kept as VectorStore for existing callers.
 VectorStore = LocalVectorStore

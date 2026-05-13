@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1 — 2026-05-12
+- Move provider backends (`base.py`, `local.py`, `aws.py`) into `vectordb/providers/` subpackage
+- Add `get_vector_store()` factory that reads backend from `.vllmd.toml` (project) or `~/.vllmd/config.toml` (global), defaulting to `LocalVectorStore`
+- Add `tomli>=2.0` as a conditional dependency for Python < 3.11
+
 ## v1.1.0 — 2026-05-12
 - Add `BaseVectorStore` ABC defining the full vector store interface
 - Add `AWSVectorStore` backed by Amazon OpenSearch Service (`pip install 'vllmd[aws]'`)
