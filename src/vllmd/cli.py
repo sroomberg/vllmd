@@ -1,6 +1,9 @@
 """CLI entry point."""
 
+import os
+import signal
 import subprocess
+import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -31,6 +34,233 @@ app = typer.Typer(
 app.add_typer(db_app, name="db")
 app.add_typer(session_app, name="session")
 console = Console()
+
+_AGENT_PID = Path.home() / ".local" / "share" / "vllmd" / "agent.pid"
+_ORCHESTRATOR_PID = Path.home() / ".local" / "share" / "vllmd" / "orchestrator.pid"
+
+
+# ---------------------------------------------------------------------------
+# Daemon helpers
+# ---------------------------------------------------------------------------
+
+
+def _start_daemon(
+    app_import: str,
+    host: str,
+    port: int,
+    pid_file: Path,
+    label: str,
+) -> None:
+    """Start a uvicorn daemon, writing its PID to *pid_file*."""
+    if pid_file.exists():
+        pid = int(pid_file.read_text().strip())
+        try:
+            os.kill(pid, 0)
+            console.print(f"[yellow]{label} is already running (pid {pid}).[/yellow]")
+            return
+        except ProcessLookupError:
+            pid_file.unlink()
+
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            app_import,
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    pid_file.write_text(str(proc.pid))
+    console.print(f"[green]{label} started[/green] (pid {proc.pid}) on {host}:{port}")
+
+
+def _stop_daemon(pid_file: Path, label: str) -> None:
+    if not pid_file.exists():
+        console.print(f"[yellow]{label} is not running (no PID file).[/yellow]")
+        return
+    pid = int(pid_file.read_text().strip())
+    try:
+        os.kill(pid, signal.SIGTERM)
+        console.print(f"[green]{label} stopped[/green] (pid {pid})")
+    except ProcessLookupError:
+        console.print(f"[yellow]Removed stale PID for {label} (pid {pid}).[/yellow]")
+    pid_file.unlink()
+
+
+# ---------------------------------------------------------------------------
+# Agent sub-app
+# ---------------------------------------------------------------------------
+
+agent_app = typer.Typer(
+    name="agent",
+    help="Manage the vllmd node agent daemon.",
+    no_args_is_help=True,
+)
+app.add_typer(agent_app, name="agent")
+
+
+@agent_app.command(name="start")
+def agent_start(
+    host: Annotated[str, typer.Option("--host", help="Bind host")] = "0.0.0.0",
+    port: Annotated[int, typer.Option("--port", "-p", help="Bind port")] = 7861,
+) -> None:
+    """Start the vllmd agent daemon on this node."""
+    _start_daemon("vllmd.agent.server:app", host, port, _AGENT_PID, "Agent")
+
+
+@agent_app.command(name="stop")
+def agent_stop() -> None:
+    """Stop the running vllmd agent daemon."""
+    _stop_daemon(_AGENT_PID, "Agent")
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator sub-app
+# ---------------------------------------------------------------------------
+
+orchestrator_app = typer.Typer(
+    name="orchestrator",
+    help="Manage the vllmd orchestrator service.",
+    no_args_is_help=True,
+)
+app.add_typer(orchestrator_app, name="orchestrator")
+
+
+@orchestrator_app.command(name="start")
+def orchestrator_start(
+    host: Annotated[str, typer.Option("--host", help="Bind host")] = "0.0.0.0",
+    port: Annotated[int, typer.Option("--port", "-p", help="Bind port")] = 7860,
+) -> None:
+    """Start the vllmd orchestrator service."""
+    _start_daemon(
+        "vllmd.orchestrator.server:app", host, port, _ORCHESTRATOR_PID, "Orchestrator"
+    )
+
+
+@orchestrator_app.command(name="stop")
+def orchestrator_stop() -> None:
+    """Stop the running vllmd orchestrator service."""
+    _stop_daemon(_ORCHESTRATOR_PID, "Orchestrator")
+
+
+# ---------------------------------------------------------------------------
+# Cluster commands (up / down / nodes)
+# ---------------------------------------------------------------------------
+
+
+def _orchestrator_url() -> str:
+    """Return the orchestrator base URL from config or default."""
+    try:
+        from .cluster.config import load_cluster_config
+
+        cfg = load_cluster_config()
+        h = cfg.orchestrator_host
+        host = h if h != "0.0.0.0" else "localhost"
+        return f"http://{host}:{cfg.orchestrator_port}"
+    except Exception:
+        return "http://localhost:7860"
+
+
+@app.command(name="up")
+def up_cmd(
+    model: Annotated[
+        Optional[str],
+        typer.Option("--model", "-m", help="Start only this model (default: all)"),
+    ] = None,
+    wait: Annotated[
+        bool,
+        typer.Option("--wait/--no-wait", help="Wait for models to start"),
+    ] = True,
+) -> None:
+    """Start all (or one) configured models via the orchestrator."""
+    import urllib.request
+
+    base = _orchestrator_url()
+    path = f"/cluster/up/{model}" if model else "/cluster/up"
+    url = f"{base}{path}"
+    req = urllib.request.Request(
+        url, method="POST", data=b"", headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=300 if wait else 10) as resp:
+            import json
+
+            result = json.loads(resp.read())
+        for r in result.get("results", []):
+            if "error" in r:
+                console.print(f"[red]{r['node']}/{r['model']}: {r['error']}[/red]")
+            else:
+                status_str = r.get("status", "ok")
+                console.print(f"[green]{r['node']}/{r['model']}: {status_str}[/green]")
+    except Exception as exc:
+        console.print(f"[red]Failed to reach orchestrator at {base}: {exc}[/red]")
+        raise typer.Exit(1) from exc
+
+
+@app.command(name="down")
+def down_cmd(
+    model: Annotated[
+        Optional[str],
+        typer.Option("--model", "-m", help="Stop only this model (default: all)"),
+    ] = None,
+) -> None:
+    """Stop all (or one) configured models via the orchestrator."""
+    import urllib.request
+
+    base = _orchestrator_url()
+    path = f"/cluster/down/{model}" if model else "/cluster/down"
+    url = f"{base}{path}"
+    req = urllib.request.Request(
+        url, method="POST", data=b"", headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            import json
+
+            result = json.loads(resp.read())
+        for r in result.get("results", []):
+            if "error" in r:
+                console.print(f"[red]{r['node']}/{r['model']}: {r['error']}[/red]")
+            else:
+                status_str = r.get("status", "ok")
+                console.print(f"[green]{r['node']}/{r['model']}: {status_str}[/green]")
+    except Exception as exc:
+        console.print(f"[red]Failed to reach orchestrator at {base}: {exc}[/red]")
+        raise typer.Exit(1) from exc
+
+
+@app.command(name="nodes")
+def nodes_cmd() -> None:
+    """List configured nodes and their agent health."""
+    import json
+    import urllib.request
+
+    base = _orchestrator_url()
+    try:
+        with urllib.request.urlopen(f"{base}/cluster/status", timeout=10) as resp:
+            data = json.loads(resp.read())
+    except Exception as exc:
+        console.print(f"[red]Failed to reach orchestrator at {base}: {exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    table = Table("Node", "Host", "Health", "Models", show_header=True)
+    for node in data.get("nodes", []):
+        health = (
+            "[green]healthy[/green]" if node["healthy"] else "[red]unreachable[/red]"
+        )
+        model_names = (
+            ", ".join(m.get("model_id", "?") for m in node.get("models", [])) or "—"
+        )
+        table.add_row(node["node"], node["host"], health, model_names)
+    console.print(table)
+
 
 _NAME_HELP = "Container name (default: vllmd-<model-dir-name>)"
 

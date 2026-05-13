@@ -31,3 +31,41 @@ vectordb:
   #   prefix: vllmd/vectordb/    # key prefix for the ChromaDB archive
   #   region: us-east-1
   #   local_cache: /tmp/vllmd/vectordb   # optional; defaults to a temp dir
+
+# Cluster orchestration (v2.0+)
+# Run `vllmd orchestrator start` on the control node and `vllmd agent start` on each GPU node.
+
+orchestrator:
+  host: 0.0.0.0
+  port: 7860
+  api_key: ""   # Bearer token required by agents; empty = no auth
+
+agent:
+  host: 0.0.0.0
+  port: 7861
+
+nodes:
+  - name: local
+    host: localhost
+    agent_port: 7861
+    gpus: [0, 1]   # GPU device IDs available on this node
+  # - name: gpu-node-2
+  #   host: 192.168.1.11
+  #   agent_port: 7861
+  #   gpus: [0]
+
+models:
+  - name: llama3-8b
+    model_path: meta-llama/Meta-Llama-3-8B-Instruct
+    dtype: bfloat16
+    max_model_len: 8192
+    nodes: [local]
+    port: 8001
+    gpu_count: 1
+    gpu_memory_utilization: 0.9
+  # - name: llama3-70b
+  #   model_path: meta-llama/Meta-Llama-3-70B-Instruct
+  #   nodes: [local]
+  #   port: 8002
+  #   gpu_count: 2
+  #   dtype: bfloat16

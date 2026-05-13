@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.0.0 — 2026-05-13
+- **Agent daemon** (`vllmd agent start/stop`): lightweight FastAPI service that manages Docker containers on a single node, with GPU auto-allocation via `VLLMD_NODE_GPUS`
+- **Orchestrator service** (`vllmd orchestrator start/stop`): FastAPI control plane that proxies OpenAI-compatible API requests (`/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`) to the correct node/model with round-robin load balancing; supports node pinning via `X-Vllmd-Node` header
+- **Cluster commands**: `vllmd up [--model]`, `vllmd down [--model]`, `vllmd nodes` for declarative model lifecycle management
+- **Cluster config**: `nodes`, `models`, `orchestrator`, and `agent` top-level keys in `vllmd.yaml`; see `config.example.yaml`
+- **Registry + router**: in-memory `ModelRegistry` tracking healthy endpoints per model; `pick_endpoint()` for round-robin and pinned routing
+- `runner.py`: add `gpu_devices` field to `RunConfig` (overrides `--gpus all` with `--gpus device=N`); add `GPUS_LABEL` tracking; `list_containers()` now returns `gpu_devices` list
+- Add `server` optional extras: `fastapi>=0.110`, `uvicorn[standard]>=0.29`, `httpx>=0.27`
+- Update CI to install `.[dev,aws,server]`
+- `AgentClient` (`vllmd.agent.client`): async httpx wrapper for the agent API
+- New packages: `vllmd.agent`, `vllmd.orchestrator`, `vllmd.cluster`
+
 ## v1.2.2 — 2026-05-13
 - Fix CI: install `.[dev,aws]` so boto3/botocore are available for S3 provider tests
 

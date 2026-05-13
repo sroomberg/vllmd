@@ -16,6 +16,7 @@ HEALTH_INTERVAL = 3
 MANAGED_LABEL = "com.vllmd.managed"
 MODEL_LABEL = "com.vllmd.model"
 MODEL_PATH_LABEL = "com.vllmd.model_path"
+GPUS_LABEL = "com.vllmd.gpus"
 
 
 @dataclass
@@ -29,6 +30,7 @@ class RunConfig:
     lora_path: Path | None = None
     max_lora_rank: int | None = None
     extra_args: list[str] = field(default_factory=list)
+    gpu_devices: list[int] | None = None  # specific GPU device IDs; overrides gpu=True
 
     @property
     def is_hub_model(self) -> bool:
@@ -140,7 +142,11 @@ def build_docker_run_cmd(config: RunConfig) -> list[str]:
     if config.lora_path is not None:
         lora_abs = config.lora_path.resolve()
         cmd += ["-v", f"{lora_abs}:/lora:ro"]
-    if config.gpu:
+    if config.gpu_devices is not None:
+        device_str = ",".join(str(d) for d in config.gpu_devices)
+        cmd += ["--gpus", f"device={device_str}"]
+        cmd += [f"--label={GPUS_LABEL}={device_str}"]
+    elif config.gpu:
         cmd += ["--gpus", "all"]
     cmd += [
         VLLM_IMAGE,
@@ -230,6 +236,12 @@ def list_containers() -> list[dict]:
         host_port = _parse_host_port(data.get("Ports", ""))
         model_id = labels.get(MODEL_LABEL, "?")
         model_path = labels.get(MODEL_PATH_LABEL, "?")
+        gpus_raw = labels.get(GPUS_LABEL, "")
+        gpu_devices = (
+            [int(x) for x in gpus_raw.split(",") if x.strip().isdigit()]
+            if gpus_raw
+            else []
+        )
         containers.append(
             {
                 "name": data["Names"],
@@ -238,6 +250,7 @@ def list_containers() -> list[dict]:
                 "port": host_port,
                 "endpoint": f"http://localhost:{host_port}" if host_port else "?",
                 "status": data.get("Status", "?"),
+                "gpu_devices": gpu_devices,
             }
         )
     return containers

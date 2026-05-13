@@ -1,11 +1,18 @@
 # vllmd
 
-Run a model that is already on the machine in a [vLLM](https://github.com/vllm-project/vllm) container and serve it on a specified port with an OpenAI-compatible API.
+Run and orchestrate [vLLM](https://github.com/vllm-project/vllm) model containers — single-node or across a cluster.
 
 ## Install
 
 ```bash
-uv pip install -e ".[dev]"
+# Core (single-node Docker management + sessions)
+uv pip install -e "."
+
+# With AWS S3 support for sessions and vector store
+uv pip install -e ".[aws]"
+
+# With orchestrator + agent daemons (FastAPI / uvicorn / httpx)
+uv pip install -e ".[server]"
 ```
 
 Requires Docker with the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for GPU support.
@@ -67,15 +74,60 @@ When only one container is running, `stop`, `status`, `logs`, and `session creat
 4. The served model ID is the directory name of the model path
 5. The endpoint exposes a standard OpenAI-compatible API at `http://localhost:<port>/v1`
 
+## Cluster Mode (v2.0+)
+
+Run an **agent** daemon on each GPU node and a single **orchestrator** on the control node. The orchestrator proxies OpenAI-compatible API requests to whichever node is running the requested model.
+
+```bash
+# 1. Define nodes and models in vllmd.yaml (see config.example.yaml)
+
+# 2. Start the agent on each GPU node
+vllmd agent start --port 7861
+
+# 3. Start the orchestrator on the control node
+vllmd orchestrator start --port 7860
+
+# 4. Bring all configured models online
+vllmd up
+
+# 5. Point any OpenAI client at the orchestrator
+curl http://orchestrator:7860/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "llama3-8b", "messages": [{"role": "user", "content": "Hi"}]}'
+
+# Check node health
+vllmd nodes
+
+# Tear everything down
+vllmd down
+```
+
+Sessions work unchanged — point them at the orchestrator endpoint and use a model name:
+
+```bash
+vllmd session create my-session \
+  --endpoint http://orchestrator:7860 \
+  --model llama3-8b
+```
+
+Node pinning: add `X-Vllmd-Node: <name>` to route a request to a specific node.
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `run` | Start a vLLM container for a model |
+| `run` | Start a vLLM container for a model (single-node) |
 | `ps` | List all running vllmd containers |
 | `stop` | Stop a container (`--all` to stop every managed container) |
 | `status` | Show container and API health (all containers if no `--name`) |
 | `logs` | Print container logs |
+| `up` | Start all (or one) configured models via the orchestrator |
+| `down` | Stop all (or one) configured models via the orchestrator |
+| `nodes` | List configured nodes and their agent health |
+| `agent start` | Start the node agent daemon |
+| `agent stop` | Stop the node agent daemon |
+| `orchestrator start` | Start the orchestrator service |
+| `orchestrator stop` | Stop the orchestrator service |
 | `session create` | Create a persistent chat session |
 | `session chat` | Send a one-shot message in a session |
 | `session attach` | Open an interactive REPL for a session |
@@ -208,7 +260,7 @@ agents:
 ## Development
 
 ```bash
-uv pip install -e ".[dev]"
+uv pip install -e ".[dev,aws,server]"
 ruff check src/ tests/
 ruff format src/ tests/
 pytest
