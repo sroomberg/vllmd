@@ -2,53 +2,54 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+import yaml
 
 from .providers.aws import AWSVectorStore
 from .providers.base import BaseVectorStore
 from .providers.local import LocalVectorStore
 
-_LOCAL_CONFIG = Path(".vllmd.toml")
-_GLOBAL_CONFIG = Path.home() / ".vllmd" / "config.toml"
+GLOBAL_CONFIG_DIR = Path.home() / ".config" / "vllmd"
+
+LOCAL_CONFIG_CANDIDATES = [
+    "vllmd.yaml",
+    "vllmd.yml",
+    ".vllmd.yaml",
+    ".vllmd.yml",
+]
 
 
 def get_vector_store(*, db_path: Path | None = None) -> BaseVectorStore:
     """Return a vector store instance configured by the local or global config file.
 
     Configuration is read from (highest priority first):
-      1. ``.vllmd.toml`` in the current working directory
-      2. ``~/.vllmd/config.toml`` (global)
+      1. First of ``vllmd.yaml``, ``vllmd.yml``, ``.vllmd.yaml``, ``.vllmd.yml``
+         found in the current working directory
+      2. ``~/.config/vllmd/config.yml`` (global)
 
     If neither file exists, returns a ``LocalVectorStore`` at ``./vectordb``
     (or *db_path* if given).
 
     *db_path* overrides the configured path for ``local`` backends only.
 
-    Example config::
+    Example config (``vllmd.yaml``)::
 
-        [vectordb]
-        backend = "local"
-
-        [vectordb.local]
-        db_path = "./vectordb"
+        vectordb:
+          backend: local
+          local:
+            db_path: ./vectordb
 
     Or for AWS::
 
-        [vectordb]
-        backend = "aws"
-
-        [vectordb.aws]
-        endpoint = "my-domain.us-east-1.es.amazonaws.com"
-        region = "us-east-1"
-        index_prefix = "vllmd"
-        embedding_dim = 1536
-        service = "es"
+        vectordb:
+          backend: aws
+          aws:
+            endpoint: my-domain.us-east-1.es.amazonaws.com
+            region: us-east-1
+            index_prefix: vllmd
+            embedding_dim: 1536
+            service: es
     """
     config = _load_config()
     vdb = config.get("vectordb", {})
@@ -76,13 +77,35 @@ def get_vector_store(*, db_path: Path | None = None) -> BaseVectorStore:
     )
 
 
+def _find_local_config() -> Path | None:
+    for candidate in LOCAL_CONFIG_CANDIDATES:
+        p = Path(candidate)
+        if p.exists():
+            return p
+    return None
+
+
+def _get_global_config() -> Path | None:
+    for name in ("config.yml", "config.yaml"):
+        p = GLOBAL_CONFIG_DIR / name
+        if p.exists():
+            return p
+    return None
+
+
+def _load_yaml(path: Path) -> dict:
+    with open(path) as fh:
+        try:
+            return yaml.safe_load(fh) or {}
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML in {path}: {e}") from e
+
+
 def _load_config() -> dict:
     """Load and merge global then local config, with local taking precedence."""
     config: dict = {}
-    for path in (_GLOBAL_CONFIG, _LOCAL_CONFIG):
-        if path.exists():
-            with open(path, "rb") as fh:
-                _deep_merge(config, tomllib.load(fh))
+    for path in filter(None, [_get_global_config(), _find_local_config()]):
+        _deep_merge(config, _load_yaml(path))
     return config
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.2 — 2026-05-12
+- Switch config file format from TOML to YAML, matching the agent-tester config pattern
+- Global config: `~/.config/vllmd/config.yml` (or `.yaml`)
+- Local config: auto-detected from `vllmd.yaml`, `vllmd.yml`, `.vllmd.yaml`, `.vllmd.yml`
+- Add `config.example.yaml`
+- Replace `tomli` dependency with `PyYAML>=6.0`
+
 ## v1.1.1 — 2026-05-12
 - Move provider backends (`base.py`, `local.py`, `aws.py`) into `vectordb/providers/` subpackage
 - Add `get_vector_store()` factory that reads backend from `.vllmd.toml` (project) or `~/.vllmd/config.toml` (global), defaulting to `LocalVectorStore`

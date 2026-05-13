@@ -1,0 +1,16 @@
+# vllmd configuration
+# Copy to vllmd.yaml in your project directory, or to ~/.config/vllmd/config.yml globally.
+# Local config takes precedence over global.
+
+vectordb:
+  backend: local   # "local" (ChromaDB) or "aws" (Amazon OpenSearch Service)
+
+  local:
+    db_path: ./vectordb
+
+  # aws:
+  #   endpoint: my-domain.us-east-1.es.amazonaws.com   # OpenSearch domain hostname
+  #   region: us-east-1
+  #   index_prefix: vllmd
+  #   embedding_dim: 1536   # must match your embedding model's output dimension
+  #   service: es           # use "aoss" for OpenSearch Serverless
