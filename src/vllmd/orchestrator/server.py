@@ -65,8 +65,12 @@ async def _refresh_registry(cfg: ClusterConfig) -> None:
 
 @asynccontextmanager
 async def _lifespan(_application: FastAPI) -> AsyncIterator[None]:
-    if _config is not None:
-        await _refresh_registry(_config)
+    global _config
+    if _config is None:
+        from ..cluster.config import load_cluster_config
+
+        _config = load_cluster_config()
+    await _refresh_registry(_config)
     task = asyncio.create_task(_poll_agents())
     try:
         yield
