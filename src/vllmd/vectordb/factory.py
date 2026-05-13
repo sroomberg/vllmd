@@ -9,6 +9,7 @@ import yaml
 from .providers.aws import AWSVectorStore
 from .providers.base import BaseVectorStore
 from .providers.local import LocalVectorStore
+from .providers.s3 import S3VectorStore
 
 GLOBAL_CONFIG_DIR = Path.home() / ".config" / "vllmd"
 
@@ -72,8 +73,19 @@ def get_vector_store(*, db_path: Path | None = None) -> BaseVectorStore:
             service=cfg.get("service", "es"),
         )
 
+    if backend == "s3":
+        cfg = vdb.get("s3", {})
+        if "bucket" not in cfg:
+            raise ValueError("vectordb.s3.bucket is required when backend = 's3'")
+        return S3VectorStore(
+            cfg["bucket"],
+            prefix=cfg.get("prefix", "vectordb/"),
+            region=cfg.get("region", "us-east-1"),
+            local_cache=Path(cfg["local_cache"]) if "local_cache" in cfg else None,
+        )
+
     raise ValueError(
-        f"Unknown vectordb backend {backend!r}. Expected 'local' or 'aws'."
+        f"Unknown vectordb backend {backend!r}. Expected 'local', 'aws', or 's3'."
     )
 
 

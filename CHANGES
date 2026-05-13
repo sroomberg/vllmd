@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.0 — 2026-05-13
+- Add pluggable session storage: `BaseSessionStore` ABC with `LocalSessionStore` (existing behaviour) and `S3SessionStore` (boto3)
+- Add `S3VectorStore`: wraps `LocalVectorStore` (ChromaDB) and syncs the database archive to/from S3 after each write
+- Add `sessions/providers/` subpackage mirroring the `vectordb/providers/` pattern
+- Add `get_session_store()` factory reading `sessions.store` from the project/global config
+- Update `config.example.yaml` with `sessions` block and `vectordb.backend: s3` example
+- `Session.save/load/list_all/delete` now accept a `BaseSessionStore` instead of a `Path`; callers use `LocalSessionStore(path)` to retain prior behaviour
+
 ## v1.1.2 — 2026-05-12
 - Switch config file format from TOML to YAML, matching the agent-tester config pattern
 - Global config: `~/.config/vllmd/config.yml` (or `.yaml`)

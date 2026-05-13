@@ -1,10 +1,15 @@
-"""Session dataclass with JSON persistence."""
+"""Session dataclass with pluggable persistence via BaseSessionStore."""
 
-import json
+from __future__ import annotations
+
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .providers.base import BaseSessionStore
 
 DEFAULT_SESSIONS_DIR = Path.home() / ".vllmd" / "sessions"
 
@@ -35,41 +40,19 @@ class Session:
     # Persistence
     # ------------------------------------------------------------------
 
-    def save(self, sessions_dir: Path = DEFAULT_SESSIONS_DIR) -> None:
-        sessions_dir.mkdir(parents=True, exist_ok=True)
-        path = sessions_dir / f"{self.id}.json"
-        data = asdict(self)
-        path.write_text(json.dumps(data, indent=2))
+    def save(self, store: "BaseSessionStore") -> None:
+        store.save(self)
 
     @classmethod
-    def load(
-        cls, session_id: str, sessions_dir: Path = DEFAULT_SESSIONS_DIR
-    ) -> "Session":
-        path = sessions_dir / f"{session_id}.json"
-        if not path.exists():
-            raise FileNotFoundError(f"Session '{session_id}' not found.")
-        data = json.loads(path.read_text())
-        messages = _parse_messages(data.pop("messages", []))
-        return cls(**data, messages=messages)
+    def load(cls, session_id: str, store: "BaseSessionStore") -> "Session":
+        return store.load(session_id)
 
     @classmethod
-    def list_all(cls, sessions_dir: Path = DEFAULT_SESSIONS_DIR) -> "list[Session]":
-        if not sessions_dir.exists():
-            return []
-        sessions = []
-        for path in sorted(sessions_dir.glob("*.json")):
-            try:
-                data = json.loads(path.read_text())
-                messages = _parse_messages(data.pop("messages", []))
-                sessions.append(cls(**data, messages=messages))
-            except Exception:
-                continue
-        return sessions
+    def list_all(cls, store: "BaseSessionStore") -> "list[Session]":
+        return store.list_all()
 
-    def delete(self, sessions_dir: Path = DEFAULT_SESSIONS_DIR) -> None:
-        path = sessions_dir / f"{self.id}.json"
-        if path.exists():
-            path.unlink()
+    def delete(self, store: "BaseSessionStore") -> None:
+        store.delete(self.id)
 
     # ------------------------------------------------------------------
     # Helpers

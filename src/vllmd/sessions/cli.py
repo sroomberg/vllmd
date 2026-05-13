@@ -11,7 +11,10 @@ from rich.table import Table
 
 from ..runner import list_containers
 from .chat import chat, retrieve_context
-from .session import DEFAULT_SESSIONS_DIR, Session
+from .factory import get_session_store
+from .providers.base import BaseSessionStore
+from .providers.local import LocalSessionStore
+from .session import Session
 
 session_app = typer.Typer(
     name="session",
@@ -21,13 +24,15 @@ session_app = typer.Typer(
 console = Console()
 
 
-def _resolve_sessions_dir(override: Optional[Path]) -> Path:
-    return override or DEFAULT_SESSIONS_DIR
+def _resolve_store(sessions_dir_override: Optional[Path]) -> BaseSessionStore:
+    if sessions_dir_override:
+        return LocalSessionStore(sessions_dir_override)
+    return get_session_store()
 
 
-def _load_session_or_exit(session_id: str, sessions_dir: Path) -> Session:
+def _load_session_or_exit(session_id: str, store: BaseSessionStore) -> Session:
     try:
-        return Session.load(session_id, sessions_dir)
+        return Session.load(session_id, store)
     except FileNotFoundError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from e
@@ -124,7 +129,7 @@ def create(
     ] = None,
 ) -> None:
     """Create a new chat session bound to a running model."""
-    sdir = _resolve_sessions_dir(sessions_dir)
+    store = _resolve_store(sessions_dir)
 
     try:
         ep, mid = _resolve_endpoint_and_model(endpoint, model, container)
@@ -132,7 +137,10 @@ def create(
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from e
 
-    resolved_db = db_path or (sdir / session_id / "vectordb")
+    if isinstance(store, LocalSessionStore):
+        resolved_db = db_path or (store._dir / session_id / "vectordb")
+    else:
+        resolved_db = db_path or Path(f"./{session_id}/vectordb")
 
     session = Session.create(
         session_id,
@@ -142,7 +150,7 @@ def create(
         system_prompt=system_prompt,
         embedding_model=embedding_model,
     )
-    session.save(sdir)
+    session.save(store)
 
     console.print(f"[green]Session '[bold]{session_id}[/bold]' created.[/green]")
     console.print(f"  Endpoint:  {ep}")
@@ -166,8 +174,8 @@ def list_cmd(
     ] = None,
 ) -> None:
     """List all sessions."""
-    sdir = _resolve_sessions_dir(sessions_dir)
-    sessions = Session.list_all(sdir)
+    store = _resolve_store(sessions_dir)
+    sessions = Session.list_all(store)
 
     if not sessions:
         console.print("[dim]No sessions found.[/dim]")
@@ -206,8 +214,8 @@ def chat_cmd(
     ] = None,
 ) -> None:
     """Send a single message in a session and print the response."""
-    sdir = _resolve_sessions_dir(sessions_dir)
-    session = _load_session_or_exit(session_id, sdir)
+    store = _resolve_store(sessions_dir)
+    session = _load_session_or_exit(session_id, store)
 
     try:
         response = chat(session, message, n_context=n_context, max_tokens=max_tokens)
@@ -215,7 +223,7 @@ def chat_cmd(
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(1) from e
 
-    session.save(sdir)
+    session.save(store)
     console.print(Markdown(response))
 
 
@@ -242,8 +250,8 @@ def attach(
 
     Commands: /history, /context <query>, /reset, /exit
     """
-    sdir = _resolve_sessions_dir(sessions_dir)
-    session = _load_session_or_exit(session_id, sdir)
+    store = _resolve_store(sessions_dir)
+    session = _load_session_or_exit(session_id, store)
 
     ctx_status = "on" if session.embedding_model else "off"
     console.print(
@@ -276,7 +284,7 @@ def attach(
 
         if user_input == "/reset":
             session.clear_history()
-            session.save(sdir)
+            session.save(store)
             console.print("[dim]History cleared.[/dim]")
             continue
 
@@ -301,7 +309,7 @@ def attach(
             console.print(f"[red]Error: {e}[/red]")
             continue
 
-        session.save(sdir)
+        session.save(store)
         console.print()
         console.print(Markdown(response))
         console.print()
@@ -323,8 +331,8 @@ def history(
     ] = None,
 ) -> None:
     """Print the conversation history for a session."""
-    sdir = _resolve_sessions_dir(sessions_dir)
-    session = _load_session_or_exit(session_id, sdir)
+    store = _resolve_store(sessions_dir)
+    session = _load_session_or_exit(session_id, store)
     _print_history(session, last=last or None)
 
 
@@ -340,11 +348,11 @@ def clear(
     ] = None,
 ) -> None:
     """Clear the conversation history for a session (keeps session config)."""
-    sdir = _resolve_sessions_dir(sessions_dir)
-    session = _load_session_or_exit(session_id, sdir)
+    store = _resolve_store(sessions_dir)
+    session = _load_session_or_exit(session_id, store)
     count = session.message_count()
     session.clear_history()
-    session.save(sdir)
+    session.save(store)
     console.print(
         f"[green]Cleared {count} messages from session '{session_id}'.[/green]"
     )
@@ -362,9 +370,9 @@ def delete(
     ] = None,
 ) -> None:
     """Delete a session and its metadata."""
-    sdir = _resolve_sessions_dir(sessions_dir)
-    session = _load_session_or_exit(session_id, sdir)
-    session.delete(sdir)
+    store = _resolve_store(sessions_dir)
+    session = _load_session_or_exit(session_id, store)
+    session.delete(store)
     console.print(f"[green]Session '{session_id}' deleted.[/green]")
 
 

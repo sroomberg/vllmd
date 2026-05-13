@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from vllmd.sessions.providers.local import LocalSessionStore
 from vllmd.sessions.session import Message, Session
 
 # ------------------------------------------------------------------
@@ -14,17 +15,19 @@ from vllmd.sessions.session import Message, Session
 
 
 def test_session_create_and_save(tmp_path: Path) -> None:
+    store = LocalSessionStore(tmp_path)
     session = Session.create(
         "test-session",
         endpoint="http://localhost:8001",
         model_id="llama3",
         db_path=tmp_path / "vectordb",
     )
-    session.save(tmp_path)
+    session.save(store)
     assert (tmp_path / "test-session.json").exists()
 
 
 def test_session_roundtrip(tmp_path: Path) -> None:
+    store = LocalSessionStore(tmp_path)
     session = Session.create(
         "roundtrip",
         endpoint="http://localhost:8001",
@@ -35,9 +38,9 @@ def test_session_roundtrip(tmp_path: Path) -> None:
     )
     session.messages.append(Message(role="user", content="hello"))
     session.messages.append(Message(role="assistant", content="hi there"))
-    session.save(tmp_path)
+    session.save(store)
 
-    loaded = Session.load("roundtrip", tmp_path)
+    loaded = Session.load("roundtrip", store)
     assert loaded.id == "roundtrip"
     assert loaded.model_id == "mistral"
     assert loaded.system_prompt == "You are helpful."
@@ -49,27 +52,31 @@ def test_session_roundtrip(tmp_path: Path) -> None:
 
 
 def test_session_list(tmp_path: Path) -> None:
+    store = LocalSessionStore(tmp_path)
     for name in ("alpha", "beta", "gamma"):
         s = Session.create(
             name, endpoint="http://localhost:8000", model_id="m", db_path=tmp_path
         )
-        s.save(tmp_path)
-    sessions = Session.list_all(tmp_path)
+        s.save(store)
+    sessions = Session.list_all(store)
     assert len(sessions) == 3
     assert {s.id for s in sessions} == {"alpha", "beta", "gamma"}
 
 
 def test_session_list_empty_dir(tmp_path: Path) -> None:
-    assert Session.list_all(tmp_path) == []
+    store = LocalSessionStore(tmp_path)
+    assert Session.list_all(store) == []
 
 
 def test_session_list_missing_dir(tmp_path: Path) -> None:
-    assert Session.list_all(tmp_path / "nonexistent") == []
+    store = LocalSessionStore(tmp_path / "nonexistent")
+    assert Session.list_all(store) == []
 
 
 def test_session_load_missing(tmp_path: Path) -> None:
+    store = LocalSessionStore(tmp_path)
     with pytest.raises(FileNotFoundError):
-        Session.load("nonexistent", tmp_path)
+        Session.load("nonexistent", store)
 
 
 def test_session_clear_history(tmp_path: Path) -> None:
@@ -84,12 +91,13 @@ def test_session_clear_history(tmp_path: Path) -> None:
 
 
 def test_session_delete(tmp_path: Path) -> None:
+    store = LocalSessionStore(tmp_path)
     session = Session.create(
         "bye", endpoint="http://localhost:8000", model_id="m", db_path=tmp_path
     )
-    session.save(tmp_path)
+    session.save(store)
     assert (tmp_path / "bye.json").exists()
-    session.delete(tmp_path)
+    session.delete(store)
     assert not (tmp_path / "bye.json").exists()
 
 

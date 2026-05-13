@@ -2,8 +2,19 @@
 # Copy to vllmd.yaml in your project directory, or to ~/.config/vllmd/config.yml globally.
 # Local config takes precedence over global.
 
+sessions:
+  store: local   # "local" (filesystem) or "s3" (AWS S3)
+
+  local:
+    sessions_dir: ~/.vllmd/sessions
+
+  # s3:
+  #   bucket: my-sessions-bucket
+  #   prefix: vllmd/sessions/   # key prefix within the bucket
+  #   region: us-east-1
+
 vectordb:
-  backend: local   # "local" (ChromaDB) or "aws" (Amazon OpenSearch Service)
+  backend: local   # "local" (ChromaDB), "aws" (Amazon OpenSearch Service), or "s3" (ChromaDB synced to S3)
 
   local:
     db_path: ./vectordb
@@ -14,3 +25,9 @@ vectordb:
   #   index_prefix: vllmd
   #   embedding_dim: 1536   # must match your embedding model's output dimension
   #   service: es           # use "aoss" for OpenSearch Serverless
+
+  # s3:
+  #   bucket: my-vectordb-bucket
+  #   prefix: vllmd/vectordb/    # key prefix for the ChromaDB archive
+  #   region: us-east-1
+  #   local_cache: /tmp/vllmd/vectordb   # optional; defaults to a temp dir
