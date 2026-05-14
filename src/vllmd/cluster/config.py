@@ -42,6 +42,7 @@ class ClusterConfig:
     agent_host: str = "0.0.0.0"
     agent_port: int = 7861
     api_key: str = ""
+    container_runtime: str = "docker"
 
     def node(self, name: str) -> NodeConfig | None:
         return next((n for n in self.nodes if n.name == name), None)
@@ -94,4 +95,5 @@ def load_cluster_config() -> ClusterConfig:
         agent_host=agent_cfg.get("host", "0.0.0.0"),
         agent_port=agent_cfg.get("port", 7861),
         api_key=orch.get("api_key", ""),
+        container_runtime=raw.get("container_runtime", "docker"),
     )

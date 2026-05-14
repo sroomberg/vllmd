@@ -1,7 +1,8 @@
-"""Docker management for vLLM model containers."""
+"""Container runtime management for vLLM model containers."""
 
 import contextlib
 import json
+import os
 import re
 import subprocess
 import time
@@ -12,6 +13,16 @@ from pathlib import Path
 VLLM_IMAGE = "vllm/vllm-openai:latest"
 HEALTH_TIMEOUT = 300
 HEALTH_INTERVAL = 3
+
+CONTAINER_RUNTIME: str = os.environ.get("VLLMD_RUNTIME", "docker")
+
+
+def set_runtime(runtime: str) -> None:
+    """Override the container runtime (e.g. 'podman'). Env var takes precedence."""
+    global CONTAINER_RUNTIME
+    if not os.environ.get("VLLMD_RUNTIME"):
+        CONTAINER_RUNTIME = runtime
+
 
 MANAGED_LABEL = "com.vllmd.managed"
 MODEL_LABEL = "com.vllmd.model"
@@ -60,7 +71,7 @@ class RunConfig:
 
 def _docker(*args: str, capture: bool = False) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["docker", *args],
+        [CONTAINER_RUNTIME, *args],
         check=True,
         capture_output=capture,
         text=True,
@@ -69,7 +80,15 @@ def _docker(*args: str, capture: bool = False) -> subprocess.CompletedProcess:
 
 def _container_exists(name: str) -> bool:
     result = subprocess.run(
-        ["docker", "ps", "-a", "--filter", f"name=^{name}$", "--format", "{{.Names}}"],
+        [
+            CONTAINER_RUNTIME,
+            "ps",
+            "-a",
+            "--filter",
+            f"name=^{name}$",
+            "--format",
+            "{{.Names}}",
+        ],
         capture_output=True,
         text=True,
     )
@@ -117,7 +136,7 @@ def _parse_labels(labels_str: str) -> dict[str, str]:
 
 def build_docker_run_cmd(config: RunConfig) -> list[str]:
     cmd = [
-        "docker",
+        CONTAINER_RUNTIME,
         "run",
         "--rm",
         "--name",
@@ -217,7 +236,7 @@ def list_containers() -> list[dict]:
     """Return info for all running vllmd-managed containers."""
     result = subprocess.run(
         [
-            "docker",
+            CONTAINER_RUNTIME,
             "ps",
             "--filter",
             f"label={MANAGED_LABEL}=true",
@@ -259,7 +278,7 @@ def list_containers() -> list[dict]:
 def status(name: str) -> dict:
     """Return container state and API health for a named container."""
     result = subprocess.run(
-        ["docker", "inspect", name, "--format", "{{json .State}}"],
+        [CONTAINER_RUNTIME, "inspect", name, "--format", "{{json .State}}"],
         capture_output=True,
         text=True,
     )
@@ -272,7 +291,7 @@ def status(name: str) -> dict:
 
     if running:
         port_result = subprocess.run(
-            ["docker", "port", name, "8000"],
+            [CONTAINER_RUNTIME, "port", name, "8000"],
             capture_output=True,
             text=True,
         )

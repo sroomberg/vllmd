@@ -17,6 +17,7 @@ from .runner import (
     build_docker_run_cmd,
     list_containers,
     logs,
+    set_runtime,
     status,
     stop,
     stop_all,
@@ -50,6 +51,7 @@ def _start_daemon(
     port: int,
     pid_file: Path,
     label: str,
+    runtime: str | None = None,
 ) -> None:
     """Start a uvicorn daemon, writing its PID to *pid_file*."""
     if pid_file.exists():
@@ -62,6 +64,9 @@ def _start_daemon(
             pid_file.unlink()
 
     pid_file.parent.mkdir(parents=True, exist_ok=True)
+    env = {**os.environ}
+    if runtime:
+        env["VLLMD_RUNTIME"] = runtime
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -76,6 +81,7 @@ def _start_daemon(
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
+        env=env,
     )
     pid_file.write_text(str(proc.pid))
     console.print(f"[green]{label} started[/green] (pid {proc.pid}) on {host}:{port}")
@@ -110,9 +116,13 @@ app.add_typer(agent_app, name="agent")
 def agent_start(
     host: Annotated[str, typer.Option("--host", help="Bind host")] = "0.0.0.0",
     port: Annotated[int, typer.Option("--port", "-p", help="Bind port")] = 7861,
+    runtime: Annotated[
+        str,
+        typer.Option("--runtime", help="Container runtime (docker, podman, …)"),
+    ] = "docker",
 ) -> None:
     """Start the vllmd agent daemon on this node."""
-    _start_daemon("vllmd.agent.server:app", host, port, _AGENT_PID, "Agent")
+    _start_daemon("vllmd.agent.server:app", host, port, _AGENT_PID, "Agent", runtime)
 
 
 @agent_app.command(name="stop")
@@ -137,10 +147,19 @@ app.add_typer(orchestrator_app, name="orchestrator")
 def orchestrator_start(
     host: Annotated[str, typer.Option("--host", help="Bind host")] = "0.0.0.0",
     port: Annotated[int, typer.Option("--port", "-p", help="Bind port")] = 7860,
+    runtime: Annotated[
+        str,
+        typer.Option("--runtime", help="Container runtime (docker, podman, …)"),
+    ] = "docker",
 ) -> None:
     """Start the vllmd orchestrator service."""
     _start_daemon(
-        "vllmd.orchestrator.server:app", host, port, _ORCHESTRATOR_PID, "Orchestrator"
+        "vllmd.orchestrator.server:app",
+        host,
+        port,
+        _ORCHESTRATOR_PID,
+        "Orchestrator",
+        runtime,
     )
 
 
@@ -318,12 +337,20 @@ def run(
             help="With --detach: wait for the API to be ready before returning.",
         ),
     ] = True,
+    runtime: Annotated[
+        str,
+        typer.Option(
+            "--runtime",
+            help="Container runtime executable (default: docker)",
+        ),
+    ] = "docker",
     extra: Annotated[
         Optional[list[str]],
         typer.Argument(help="Extra args forwarded verbatim to vLLM"),
     ] = None,
 ) -> None:
     """Start a vLLM container serving MODEL on PORT."""
+    set_runtime(runtime)
     if lora is not None and max_lora_rank is None:
         max_lora_rank = _detect_lora_rank(lora)
 

@@ -32,6 +32,10 @@ vectordb:
   #   region: us-east-1
   #   local_cache: /tmp/vllmd/vectordb   # optional; defaults to a temp dir
 
+# Container runtime — set to "podman" for rootless Podman environments
+# Overridden by the VLLMD_RUNTIME env var or --runtime CLI flag.
+# container_runtime: docker
+
 # Cluster orchestration (v2.0+)
 # Run `vllmd orchestrator start` on the control node and `vllmd agent start` on each GPU node.
 

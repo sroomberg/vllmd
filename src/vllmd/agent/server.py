@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from ..runner import (
+    CONTAINER_RUNTIME,
     RunConfig,
     _container_exists,
     _detect_lora_rank,
@@ -163,7 +164,7 @@ def stop_model(name: str, _: Auth) -> dict:
 @app.get("/models/{name}/logs")
 def get_logs(name: str, tail: int = 100, _: Auth = None) -> dict:
     result = subprocess.run(
-        ["docker", "logs", "--tail", str(tail), name],
+        [CONTAINER_RUNTIME, "logs", "--tail", str(tail), name],
         capture_output=True,
         text=True,
     )
@@ -175,7 +176,10 @@ def get_logs(name: str, tail: int = 100, _: Auth = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def create_app(api_key: str = "") -> FastAPI:
+def create_app(api_key: str = "", container_runtime: str = "docker") -> FastAPI:
     global _api_key
+    from ..runner import set_runtime
+
     _api_key = api_key
+    set_runtime(container_runtime)
     return app
