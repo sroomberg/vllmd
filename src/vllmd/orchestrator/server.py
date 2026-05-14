@@ -22,9 +22,7 @@ from .router import pick_endpoint
 _config: ClusterConfig | None = None
 _registry = ModelRegistry()
 _api_key: str = ""
-_persist_path: Path = (
-    Path.home() / ".local" / "share" / "vllmd" / "registry.json"
-)
+_persist_path: Path = Path.home() / ".local" / "share" / "vllmd" / "registry.json"
 
 
 def _save_registry() -> None:

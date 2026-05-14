@@ -276,6 +276,78 @@ def nodes_cmd() -> None:
     console.print(table)
 
 
+# ---------------------------------------------------------------------------
+# Task command (agentic tool-use loop)
+# ---------------------------------------------------------------------------
+
+
+@app.command(name="task")
+def task_cmd(
+    prompt: Annotated[str, typer.Argument(help="Task description for the agent")],
+    endpoint: Annotated[
+        Optional[str],
+        typer.Option("--endpoint", "-e", help="vLLM (or orchestrator) base URL"),
+    ] = None,
+    model: Annotated[
+        Optional[str],
+        typer.Option("--model", "-m", help="Model ID to use"),
+    ] = None,
+    api_key: Annotated[
+        Optional[str],
+        typer.Option("--api-key", help="Bearer token for the endpoint"),
+    ] = None,
+    workdir: Annotated[
+        Optional[Path],
+        typer.Option("--workdir", "-w", help="Working directory for tool execution"),
+    ] = None,
+    pem: Annotated[
+        Optional[Path],
+        typer.Option("--pem", help="Path to SSH PEM key for git operations"),
+    ] = None,
+    max_turns: Annotated[
+        int,
+        typer.Option("--max-turns", help="Maximum conversation turns"),
+    ] = 20,
+    system: Annotated[
+        Optional[str],
+        typer.Option("--system", help="Override the system prompt"),
+    ] = None,
+) -> None:
+    """Run an agentic task using tool use against a vLLM-compatible endpoint."""
+    from .loop import AgentLoop
+
+    if endpoint is None or model is None:
+        console.print(
+            "[red]--endpoint and --model are required (or configure a session with "
+            "vllmd session create).[/red]"
+        )
+        raise typer.Exit(1)
+
+    wd = str(workdir.resolve()) if workdir else "."
+
+    def _on_message(role: str, content: str) -> None:
+        if role == "tool":
+            console.print(f"[dim]{content}[/dim]")
+        elif role == "assistant":
+            console.print(content)
+
+    loop = AgentLoop(
+        endpoint,
+        model,
+        api_key=api_key or "",
+        workdir=wd,
+        pem_path=str(pem.resolve()) if pem else None,
+        max_turns=max_turns,
+        system=system,
+        on_message=_on_message,
+    )
+    try:
+        loop.run_sync(prompt)
+    except Exception as exc:
+        console.print(f"[red]Task failed: {exc}[/red]")
+        raise typer.Exit(1) from exc
+
+
 _NAME_HELP = "Container name (default: vllmd-<model-dir-name>)"
 
 

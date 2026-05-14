@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.0 — 2026-05-13
+- **Tool-use agent loop** (`vllmd task`): run an agentic task against any vLLM-compatible endpoint using an iterative tool-call loop
+- Six built-in tools: `bash` (shell execution), `read_file`, `write_file`, `git_clone`, `git_commit`, `git_push`
+- `--pem` flag on `vllmd task` for SSH PEM key authentication in git operations (sets `GIT_SSH_COMMAND`)
+- `--workdir`, `--max-turns`, `--system`, `--api-key` options for the task command
+- New `AgentLoop` / `create_loop` public API in `vllmd.loop`; `ToolExecutor` and `TOOL_DEFINITIONS` exported from `vllmd.tools`
+- Tool output truncated to 8 KB to avoid context overflow
+
 ## v2.0.2 — 2026-05-13
 - Orchestrator persists registry state to `~/.local/share/vllmd/registry.json` after every mutation (cluster up/down, agent health refresh)
 - On restart the orchestrator loads the last-known registry from disk before querying agents, so it can immediately route requests while the background refresh runs
