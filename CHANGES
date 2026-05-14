@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.0.1 — 2026-05-13
+- Move `container_runtime` from `ClusterConfig` to `NodeConfig`: each node configures its own runtime; the orchestrator has no container runtime dependency
+- Remove `--runtime` from `vllmd orchestrator start` (the orchestrator never invokes a container runtime)
+- `container_runtime` field now lives on `NodeConfig` (YAML: `nodes[*].container_runtime`, default `"docker"`)
+
 ## v2.0.0 — 2026-05-13
 - **Agent daemon** (`vllmd agent start/stop`): lightweight FastAPI service that manages Docker containers on a single node, with GPU auto-allocation via `VLLMD_NODE_GPUS`
 - **Orchestrator service** (`vllmd orchestrator start/stop`): FastAPI control plane that proxies OpenAI-compatible API requests (`/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`) to the correct node/model with round-robin load balancing; supports node pinning via `X-Vllmd-Node` header

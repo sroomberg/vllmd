@@ -147,10 +147,6 @@ app.add_typer(orchestrator_app, name="orchestrator")
 def orchestrator_start(
     host: Annotated[str, typer.Option("--host", help="Bind host")] = "0.0.0.0",
     port: Annotated[int, typer.Option("--port", "-p", help="Bind port")] = 7860,
-    runtime: Annotated[
-        str,
-        typer.Option("--runtime", help="Container runtime (docker, podman, …)"),
-    ] = "docker",
 ) -> None:
     """Start the vllmd orchestrator service."""
     _start_daemon(
@@ -159,7 +155,6 @@ def orchestrator_start(
         port,
         _ORCHESTRATOR_PID,
         "Orchestrator",
-        runtime,
     )
 
 

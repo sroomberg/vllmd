@@ -13,6 +13,7 @@ class NodeConfig:
     host: str
     agent_port: int = 7861
     gpus: list[int] = field(default_factory=list)
+    container_runtime: str = "docker"
 
     @property
     def agent_url(self) -> str:
@@ -42,7 +43,6 @@ class ClusterConfig:
     agent_host: str = "0.0.0.0"
     agent_port: int = 7861
     api_key: str = ""
-    container_runtime: str = "docker"
 
     def node(self, name: str) -> NodeConfig | None:
         return next((n for n in self.nodes if n.name == name), None)
@@ -64,6 +64,7 @@ def load_cluster_config() -> ClusterConfig:
             host=n["host"],
             agent_port=n.get("agent_port", 7861),
             gpus=n.get("gpus", []),
+            container_runtime=n.get("container_runtime", "docker"),
         )
         for n in raw.get("nodes", [])
     ]
@@ -95,5 +96,4 @@ def load_cluster_config() -> ClusterConfig:
         agent_host=agent_cfg.get("host", "0.0.0.0"),
         agent_port=agent_cfg.get("port", 7861),
         api_key=orch.get("api_key", ""),
-        container_runtime=raw.get("container_runtime", "docker"),
     )

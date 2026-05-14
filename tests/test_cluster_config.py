@@ -44,6 +44,7 @@ def test_load_cluster_config():
     assert len(cfg.models) == 2
     assert cfg.api_key == "secret"
     assert cfg.orchestrator_port == 7860
+    assert not hasattr(cfg, "container_runtime")
 
 
 def test_node_defaults():
@@ -54,6 +55,7 @@ def test_node_defaults():
     assert gpu2 is not None
     assert gpu2.agent_port == 7861
     assert gpu2.gpus == []
+    assert gpu2.container_runtime == "docker"
 
 
 def test_node_agent_url():
