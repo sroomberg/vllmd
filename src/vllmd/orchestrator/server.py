@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 import httpx
@@ -20,6 +22,21 @@ from .router import pick_endpoint
 _config: ClusterConfig | None = None
 _registry = ModelRegistry()
 _api_key: str = ""
+_persist_path: Path = (
+    Path.home() / ".local" / "share" / "vllmd" / "registry.json"
+)
+
+
+def _save_registry() -> None:
+    with contextlib.suppress(Exception):
+        _persist_path.parent.mkdir(parents=True, exist_ok=True)
+        _persist_path.write_text(json.dumps(_registry.dump(), indent=2))
+
+
+def _load_registry() -> None:
+    with contextlib.suppress(Exception):
+        data = json.loads(_persist_path.read_text())
+        _registry.load(data)
 
 
 def _check_auth(authorization: Annotated[str | None, Header()] = None) -> None:
@@ -47,6 +64,7 @@ async def _poll_agents() -> None:
 
 
 async def _refresh_registry(cfg: ClusterConfig) -> None:
+    changed = False
     for node in cfg.nodes:
         async with AgentClient(node.agent_url, cfg.api_key) as client:
             try:
@@ -58,9 +76,13 @@ async def _refresh_registry(cfg: ClusterConfig) -> None:
                         endpoint = f"http://{node.host}:{port}"
                         _registry.register(model_id, node.name, endpoint)
                         _registry.mark_healthy(model_id, node.name, True)
+                        changed = True
             except Exception:
                 for spec in cfg.models_for_node(node.name):
                     _registry.mark_healthy(spec.name, node.name, False)
+                    changed = True
+    if changed:
+        _save_registry()
 
 
 @asynccontextmanager
@@ -70,6 +92,7 @@ async def _lifespan(_application: FastAPI) -> AsyncIterator[None]:
         from ..cluster.config import load_cluster_config
 
         _config = load_cluster_config()
+    _load_registry()
     await _refresh_registry(_config)
     task = asyncio.create_task(_poll_agents())
     try:
@@ -154,6 +177,7 @@ async def cluster_up(_: Auth) -> dict:
         for node_name in spec.nodes
     ]
     results = await asyncio.gather(*tasks)
+    _save_registry()
     return {"results": list(results)}
 
 
@@ -179,6 +203,7 @@ async def cluster_down(_: Auth) -> dict:
 
             tasks.append(_stop())
     results = await asyncio.gather(*tasks)
+    _save_registry()
     return {"results": list(results)}
 
 
@@ -191,6 +216,7 @@ async def cluster_up_model(model: str, _: Auth) -> dict:
         raise HTTPException(status_code=404, detail=f"Model '{model}' not in config.")
     tasks = [_start_spec_on_node(spec, node_name, _config) for node_name in spec.nodes]
     results = await asyncio.gather(*tasks)
+    _save_registry()
     return {"results": list(results)}
 
 
@@ -218,6 +244,7 @@ async def cluster_down_model(model: str, _: Auth) -> dict:
 
         tasks.append(_stop())
     results = await asyncio.gather(*tasks)
+    _save_registry()
     return {"results": list(results)}
 
 

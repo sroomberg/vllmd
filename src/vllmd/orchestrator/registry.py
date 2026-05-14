@@ -41,3 +41,24 @@ class ModelRegistry:
 
     def all_models(self) -> list[str]:
         return list(self._endpoints.keys())
+
+    def dump(self) -> dict:
+        return {
+            model: [
+                {"node": ep.node, "endpoint": ep.endpoint, "healthy": ep.healthy}
+                for ep in eps
+            ]
+            for model, eps in self._endpoints.items()
+        }
+
+    def load(self, data: dict) -> None:
+        self._endpoints.clear()
+        for model, eps in data.items():
+            self._endpoints[model] = [
+                ModelEndpoint(
+                    node=e["node"],
+                    endpoint=e["endpoint"],
+                    healthy=e.get("healthy", True),
+                )
+                for e in eps
+            ]

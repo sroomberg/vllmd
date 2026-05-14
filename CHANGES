@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.0.2 — 2026-05-13
+- Orchestrator persists registry state to `~/.local/share/vllmd/registry.json` after every mutation (cluster up/down, agent health refresh)
+- On restart the orchestrator loads the last-known registry from disk before querying agents, so it can immediately route requests while the background refresh runs
+- `ModelRegistry.dump()` / `load()` for serialization; save/load errors are silently suppressed so a missing or corrupt file never blocks startup
+
 ## v2.0.1 — 2026-05-13
 - Move `container_runtime` from `ClusterConfig` to `NodeConfig`: each node configures its own runtime; the orchestrator has no container runtime dependency
 - Remove `--runtime` from `vllmd orchestrator start` (the orchestrator never invokes a container runtime)

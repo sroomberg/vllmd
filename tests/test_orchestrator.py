@@ -59,6 +59,32 @@ def test_all_models():
     assert set(reg.all_models()) == {"llama3", "llama70b"}
 
 
+def test_dump_and_load_roundtrip():
+    reg = ModelRegistry()
+    reg.register("llama3", "local", "http://localhost:8001")
+    reg.register("llama3", "node2", "http://10.0.0.2:8001")
+    reg.mark_healthy("llama3", "node2", False)
+
+    data = reg.dump()
+    reg2 = ModelRegistry()
+    reg2.load(data)
+
+    eps = reg2.get_endpoints("llama3")
+    assert len(eps) == 2
+    local_ep = next(e for e in eps if e.node == "local")
+    node2_ep = next(e for e in eps if e.node == "node2")
+    assert local_ep.endpoint == "http://localhost:8001"
+    assert local_ep.healthy is True
+    assert node2_ep.healthy is False
+
+
+def test_load_clears_existing():
+    reg = ModelRegistry()
+    reg.register("stale", "old-node", "http://old:8001")
+    reg.load({"llama3": [{"node": "local", "endpoint": "http://localhost:8001"}]})
+    assert reg.all_models() == ["llama3"]
+
+
 # ---------------------------------------------------------------------------
 # Router tests
 # ---------------------------------------------------------------------------
@@ -185,3 +211,35 @@ def test_orch_proxy_no_healthy_endpoint(orch_client):
         json={"model": "llama3", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert resp.status_code == 503
+
+
+def test_registry_persistence(tmp_path):
+    import json
+
+    from vllmd.orchestrator import server as orch_server
+
+    persist_file = tmp_path / "registry.json"
+    orch_server._persist_path = persist_file
+    orch_server._registry = ModelRegistry()
+    orch_server._registry.register("llama3", "local", "http://localhost:8001")
+
+    orch_server._save_registry()
+    assert persist_file.exists()
+    data = json.loads(persist_file.read_text())
+    assert "llama3" in data
+
+    orch_server._registry = ModelRegistry()
+    assert orch_server._registry.get_endpoints("llama3") == []
+
+    orch_server._load_registry()
+    eps = orch_server._registry.get_endpoints("llama3")
+    assert len(eps) == 1
+    assert eps[0].endpoint == "http://localhost:8001"
+
+    orch_server._persist_path = (
+        __import__("pathlib").Path.home()
+        / ".local"
+        / "share"
+        / "vllmd"
+        / "registry.json"
+    )
