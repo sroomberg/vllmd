@@ -128,6 +128,7 @@ Node pinning: add `X-Vllmd-Node: <name>` to route a request to a specific node.
 | `agent stop` | Stop the node agent daemon |
 | `orchestrator start` | Start the orchestrator service |
 | `orchestrator stop` | Stop the orchestrator service |
+| `task` | Run an agentic task with tool use against a vLLM endpoint |
 | `session create` | Create a persistent chat session |
 | `session chat` | Send a one-shot message in a session |
 | `session attach` | Open an interactive REPL for a session |
@@ -141,6 +142,48 @@ Node pinning: add `X-Vllmd-Node: <name>` to route a request to a specific node.
 | `db summarize` | Replace a session's history with an abridged summary |
 | `db sync` | Sync the vector DB to/from S3 |
 | `db stats` | Show collection sizes |
+
+## Agentic Task Execution (v2.1+)
+
+`vllmd task` runs a prompt through an iterative tool-use loop against any vLLM-compatible endpoint. The model calls tools — bash, file I/O, git — until the task is complete.
+
+```bash
+# Run a task against a local model
+vllmd task "refactor the auth module to use JWT and commit the result" \
+  --endpoint http://localhost:8001 \
+  --model llama3 \
+  --workdir /path/to/repo
+
+# Use an SSH PEM key for authenticated git push
+vllmd task "clone the repo, apply the fix, and push to branch fix/auth" \
+  --endpoint http://orchestrator:7860 \
+  --model llama3 \
+  --workdir /tmp/workspace \
+  --pem ~/.ssh/deploy.pem
+```
+
+Available tools:
+
+| Tool | Description |
+|------|-------------|
+| `bash` | Run a shell command; stdout+stderr returned (truncated to 8 KB) |
+| `read_file` | Read a file |
+| `write_file` | Write a file (creates parent directories) |
+| `git_clone` | Clone a repository |
+| `git_commit` | Stage all changes and commit |
+| `git_push` | Push a branch to a remote |
+
+### `task` options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--endpoint`, `-e` | (required) | vLLM or orchestrator base URL |
+| `--model`, `-m` | (required) | Model ID |
+| `--api-key` | — | Bearer token for the endpoint |
+| `--workdir`, `-w` | `.` | Working directory for tool execution |
+| `--pem` | — | SSH PEM key for git clone/push |
+| `--max-turns` | `20` | Maximum conversation turns before stopping |
+| `--system` | — | Override the default system prompt |
 
 ## Options
 
