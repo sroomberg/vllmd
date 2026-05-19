@@ -76,7 +76,7 @@ def test_get_model(client):
 def test_start_model(client, monkeypatch):
     monkeypatch.delenv("VLLMD_NODE_GPUS", raising=False)
     with (
-        patch("vllmd.agent.server._container_exists", return_value=False),
+        patch("vllmd.agent.server.container_exists", return_value=False),
         patch(
             "vllmd.agent.server.build_docker_run_cmd", return_value=["docker", "run"]
         ),
@@ -92,7 +92,7 @@ def test_start_model(client, monkeypatch):
 
 
 def test_start_model_conflict(client):
-    with patch("vllmd.agent.server._container_exists", return_value=True):
+    with patch("vllmd.agent.server.container_exists", return_value=True):
         resp = client.post(
             "/models/llama3/start",
             json={"model_path": "meta-llama/Llama-3", "port": 8001},
@@ -103,7 +103,7 @@ def test_start_model_conflict(client):
 def test_start_model_insufficient_gpus(client, monkeypatch):
     monkeypatch.setenv("VLLMD_NODE_GPUS", "0")
     with (
-        patch("vllmd.agent.server._container_exists", return_value=False),
+        patch("vllmd.agent.server.container_exists", return_value=False),
         patch("vllmd.agent.server.list_containers", return_value=_mock_containers([0])),
     ):
         resp = client.post(
@@ -115,7 +115,7 @@ def test_start_model_insufficient_gpus(client, monkeypatch):
 
 def test_stop_model(client):
     with (
-        patch("vllmd.agent.server._container_exists", return_value=True),
+        patch("vllmd.agent.server.container_exists", return_value=True),
         patch("vllmd.agent.server.stop") as mock_stop,
     ):
         resp = client.post("/models/llama3/stop")
@@ -125,7 +125,7 @@ def test_stop_model(client):
 
 
 def test_stop_model_not_found(client):
-    with patch("vllmd.agent.server._container_exists", return_value=False):
+    with patch("vllmd.agent.server.container_exists", return_value=False):
         resp = client.post("/models/llama3/stop")
     assert resp.status_code == 404
 

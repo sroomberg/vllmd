@@ -1,9 +1,11 @@
 """CLI entry point."""
 
+import json
 import os
 import signal
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -13,8 +15,8 @@ from rich.table import Table
 
 from .runner import (
     RunConfig,
-    _detect_lora_rank,
     build_docker_run_cmd,
+    detect_lora_rank,
     list_containers,
     logs,
     set_runtime,
@@ -169,6 +171,16 @@ def orchestrator_stop() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _orchestrator_request(path: str, *, method: str = "GET", timeout: int = 60) -> dict:
+    url = f"{_orchestrator_url()}{path}"
+    data = b"" if method == "POST" else None
+    req = urllib.request.Request(
+        url, method=method, data=data, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read())
+
+
 def _orchestrator_url() -> str:
     """Return the orchestrator base URL from config or default."""
     try:
@@ -194,19 +206,9 @@ def up_cmd(
     ] = True,
 ) -> None:
     """Start all (or one) configured models via the orchestrator."""
-    import urllib.request
-
-    base = _orchestrator_url()
     path = f"/cluster/up/{model}" if model else "/cluster/up"
-    url = f"{base}{path}"
-    req = urllib.request.Request(
-        url, method="POST", data=b"", headers={"Content-Type": "application/json"}
-    )
     try:
-        with urllib.request.urlopen(req, timeout=300 if wait else 10) as resp:
-            import json
-
-            result = json.loads(resp.read())
+        result = _orchestrator_request(path, method="POST", timeout=300 if wait else 10)
         for r in result.get("results", []):
             if "error" in r:
                 console.print(f"[red]{r['node']}/{r['model']}: {r['error']}[/red]")
@@ -214,7 +216,7 @@ def up_cmd(
                 status_str = r.get("status", "ok")
                 console.print(f"[green]{r['node']}/{r['model']}: {status_str}[/green]")
     except Exception as exc:
-        console.print(f"[red]Failed to reach orchestrator at {base}: {exc}[/red]")
+        console.print(f"[red]Failed to reach orchestrator: {exc}[/red]")
         raise typer.Exit(1) from exc
 
 
@@ -226,19 +228,9 @@ def down_cmd(
     ] = None,
 ) -> None:
     """Stop all (or one) configured models via the orchestrator."""
-    import urllib.request
-
-    base = _orchestrator_url()
     path = f"/cluster/down/{model}" if model else "/cluster/down"
-    url = f"{base}{path}"
-    req = urllib.request.Request(
-        url, method="POST", data=b"", headers={"Content-Type": "application/json"}
-    )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            import json
-
-            result = json.loads(resp.read())
+        result = _orchestrator_request(path, method="POST")
         for r in result.get("results", []):
             if "error" in r:
                 console.print(f"[red]{r['node']}/{r['model']}: {r['error']}[/red]")
@@ -246,22 +238,17 @@ def down_cmd(
                 status_str = r.get("status", "ok")
                 console.print(f"[green]{r['node']}/{r['model']}: {status_str}[/green]")
     except Exception as exc:
-        console.print(f"[red]Failed to reach orchestrator at {base}: {exc}[/red]")
+        console.print(f"[red]Failed to reach orchestrator: {exc}[/red]")
         raise typer.Exit(1) from exc
 
 
 @app.command(name="nodes")
 def nodes_cmd() -> None:
     """List configured nodes and their agent health."""
-    import json
-    import urllib.request
-
-    base = _orchestrator_url()
     try:
-        with urllib.request.urlopen(f"{base}/cluster/status", timeout=10) as resp:
-            data = json.loads(resp.read())
+        data = _orchestrator_request("/cluster/status", timeout=10)
     except Exception as exc:
-        console.print(f"[red]Failed to reach orchestrator at {base}: {exc}[/red]")
+        console.print(f"[red]Failed to reach orchestrator: {exc}[/red]")
         raise typer.Exit(1) from exc
 
     table = Table("Node", "Host", "Health", "Models", show_header=True)
@@ -419,7 +406,7 @@ def run(
     """Start a vLLM container serving MODEL on PORT."""
     set_runtime(runtime)
     if lora is not None and max_lora_rank is None:
-        max_lora_rank = _detect_lora_rank(lora)
+        max_lora_rank = detect_lora_rank(lora)
 
     config = RunConfig(
         model_path=model,

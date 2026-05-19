@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..vectordb.factory import _load_config
+from ..vectordb.factory import load_config
 from .providers.base import BaseSessionStore
 from .providers.local import LocalSessionStore
 from .session import DEFAULT_SESSIONS_DIR
@@ -32,7 +32,7 @@ def get_session_store() -> BaseSessionStore:
             prefix: vllmd/sessions/
             region: us-east-1
     """
-    config = _load_config()
+    config = load_config()
     cfg = config.get("sessions", {})
     backend = cfg.get("store", "local")
 

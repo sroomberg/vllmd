@@ -1,6 +1,7 @@
 """ChromaDB-backed local vector store."""
 
 import contextlib
+import logging
 import time
 import uuid
 from pathlib import Path
@@ -17,6 +18,8 @@ from .base import (
     _chunk_text,
     _file_id,
 )
+
+log = logging.getLogger(__name__)
 
 
 def _ingest_chunks(
@@ -194,5 +197,6 @@ class LocalVectorStore(BaseVectorStore):
                 col = self._client.get_collection(name)
                 out[name] = col.count()
             except Exception:
+                log.debug("Collection %r unavailable", name, exc_info=True)
                 out[name] = 0
         return out

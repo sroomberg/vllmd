@@ -1,10 +1,13 @@
 """Chat function: assembles context and calls the vLLM completions endpoint."""
 
+import logging
 from pathlib import Path
 
 from ..vectordb.embeddings import _post_json, embed, make_embedder
 from ..vectordb.store import COLLECTION_CODE, COLLECTION_DOCUMENTS, VectorStore
 from .session import Session
+
+log = logging.getLogger(__name__)
 
 MAX_HISTORY = 20
 N_CONTEXT_CHUNKS = 3
@@ -87,6 +90,7 @@ def _retrieve_context(session: Session, query: str, n: int) -> str:
             return ""
         return "\n\n---\n\n".join(chunks[:n])
     except Exception:
+        log.debug("Context retrieval failed", exc_info=True)
         return ""
 
 
@@ -108,4 +112,4 @@ def _store_history(session: Session, user_message: str, response: str) -> None:
         store.add_history(session.id, "user", user_message, embedder)
         store.add_history(session.id, "assistant", response, embedder)
     except Exception:
-        pass
+        log.debug("Failed to store conversation embedding", exc_info=True)

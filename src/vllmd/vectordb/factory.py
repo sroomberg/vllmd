@@ -52,7 +52,7 @@ def get_vector_store(*, db_path: Path | None = None) -> BaseVectorStore:
             embedding_dim: 1536
             service: es
     """
-    config = _load_config()
+    config = load_config()
     vdb = config.get("vectordb", {})
     backend = vdb.get("backend", "local")
 
@@ -113,7 +113,7 @@ def _load_yaml(path: Path) -> dict:
             raise ValueError(f"Invalid YAML in {path}: {e}") from e
 
 
-def _load_config() -> dict:
+def load_config() -> dict:
     """Load and merge global then local config, with local taking precedence."""
     config: dict = {}
     for path in filter(None, [_get_global_config(), _find_local_config()]):

@@ -7,12 +7,12 @@ from vllmd.runner import (
     MANAGED_LABEL,
     MODEL_LABEL,
     RunConfig,
-    _container_exists,
-    _detect_lora_rank,
     _parse_host_port,
     _parse_labels,
     _wait_ready,
     build_docker_run_cmd,
+    container_exists,
+    detect_lora_rank,
 )
 
 
@@ -121,16 +121,16 @@ def test_parse_labels() -> None:
     assert labels["com.vllmd.model"] == "llama3"
 
 
-def test_container_exists_false() -> None:
+def testcontainer_exists_false() -> None:
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="other-container\n")
-        assert not _container_exists("vllmd-llama3")
+        assert not container_exists("vllmd-llama3")
 
 
-def test_container_exists_true() -> None:
+def testcontainer_exists_true() -> None:
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="vllmd-llama3\n")
-        assert _container_exists("vllmd-llama3")
+        assert container_exists("vllmd-llama3")
 
 
 def test_wait_ready_success() -> None:
@@ -148,24 +148,24 @@ def test_wait_ready_timeout() -> None:
         assert not _wait_ready("http://localhost:8000", timeout=1)
 
 
-def test_detect_lora_rank_from_config(tmp_path: Path) -> None:
+def testdetect_lora_rank_from_config(tmp_path: Path) -> None:
     adapter_dir = tmp_path / "my-adapter"
     adapter_dir.mkdir()
     (adapter_dir / "adapter_config.json").write_text('{"r": 16, "lora_alpha": 32}')
-    assert _detect_lora_rank(adapter_dir) == 16
+    assert detect_lora_rank(adapter_dir) == 16
 
 
-def test_detect_lora_rank_missing_file(tmp_path: Path) -> None:
+def testdetect_lora_rank_missing_file(tmp_path: Path) -> None:
     adapter_dir = tmp_path / "my-adapter"
     adapter_dir.mkdir()
-    assert _detect_lora_rank(adapter_dir) is None
+    assert detect_lora_rank(adapter_dir) is None
 
 
-def test_detect_lora_rank_invalid_json(tmp_path: Path) -> None:
+def testdetect_lora_rank_invalid_json(tmp_path: Path) -> None:
     adapter_dir = tmp_path / "my-adapter"
     adapter_dir.mkdir()
     (adapter_dir / "adapter_config.json").write_text("not json")
-    assert _detect_lora_rank(adapter_dir) is None
+    assert detect_lora_rank(adapter_dir) is None
 
 
 def test_build_docker_run_cmd_with_lora(tmp_path: Path) -> None:

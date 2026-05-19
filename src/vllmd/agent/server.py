@@ -13,9 +13,9 @@ from pydantic import BaseModel
 from ..runner import (
     CONTAINER_RUNTIME,
     RunConfig,
-    _container_exists,
-    _detect_lora_rank,
     build_docker_run_cmd,
+    container_exists,
+    detect_lora_rank,
     list_containers,
     status,
     stop,
@@ -101,7 +101,7 @@ class StartModelRequest(BaseModel):
 
 @app.post("/models/{name}/start")
 def start_model(name: str, req: StartModelRequest, _: Auth) -> dict:
-    if _container_exists(name):
+    if container_exists(name):
         raise HTTPException(
             status_code=409, detail=f"Container '{name}' already exists."
         )
@@ -127,7 +127,7 @@ def start_model(name: str, req: StartModelRequest, _: Auth) -> dict:
     lora_path = Path(req.lora_path) if req.lora_path else None
     max_lora_rank = req.max_lora_rank
     if lora_path and max_lora_rank is None:
-        max_lora_rank = _detect_lora_rank(lora_path)
+        max_lora_rank = detect_lora_rank(lora_path)
 
     extra = list(req.extra_args)
     if req.gpu_memory_utilization != 0.9:
@@ -155,7 +155,7 @@ def start_model(name: str, req: StartModelRequest, _: Auth) -> dict:
 
 @app.post("/models/{name}/stop")
 def stop_model(name: str, _: Auth) -> dict:
-    if not _container_exists(name):
+    if not container_exists(name):
         raise HTTPException(status_code=404, detail=f"Container '{name}' not found.")
     stop(name)
     return {"name": name, "status": "stopped"}

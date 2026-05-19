@@ -36,7 +36,7 @@ def _raw_config() -> dict:
 
 
 def test_load_cluster_config():
-    with patch("vllmd.cluster.config._load_config", return_value=_raw_config()):
+    with patch("vllmd.cluster.config.load_config", return_value=_raw_config()):
         cfg = load_cluster_config()
 
     assert isinstance(cfg, ClusterConfig)
@@ -48,7 +48,7 @@ def test_load_cluster_config():
 
 
 def test_node_defaults():
-    with patch("vllmd.cluster.config._load_config", return_value=_raw_config()):
+    with patch("vllmd.cluster.config.load_config", return_value=_raw_config()):
         cfg = load_cluster_config()
 
     gpu2 = cfg.node("gpu2")
@@ -64,7 +64,7 @@ def test_node_agent_url():
 
 
 def test_model_defaults():
-    with patch("vllmd.cluster.config._load_config", return_value=_raw_config()):
+    with patch("vllmd.cluster.config.load_config", return_value=_raw_config()):
         cfg = load_cluster_config()
 
     m = cfg.model("llama70b")
@@ -75,7 +75,7 @@ def test_model_defaults():
 
 
 def test_models_for_node():
-    with patch("vllmd.cluster.config._load_config", return_value=_raw_config()):
+    with patch("vllmd.cluster.config.load_config", return_value=_raw_config()):
         cfg = load_cluster_config()
 
     local_models = cfg.models_for_node("local")
@@ -87,13 +87,13 @@ def test_models_for_node():
 
 
 def test_missing_node_returns_none():
-    with patch("vllmd.cluster.config._load_config", return_value=_raw_config()):
+    with patch("vllmd.cluster.config.load_config", return_value=_raw_config()):
         cfg = load_cluster_config()
     assert cfg.node("nonexistent") is None
 
 
 def test_empty_config():
-    with patch("vllmd.cluster.config._load_config", return_value={}):
+    with patch("vllmd.cluster.config.load_config", return_value={}):
         cfg = load_cluster_config()
     assert cfg.nodes == []
     assert cfg.models == []

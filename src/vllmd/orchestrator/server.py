@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,32 +16,42 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..agent.client import AgentClient
-from ..cluster.config import ClusterConfig, ModelSpec
+from ..cluster.config import ClusterConfig, ModelSpec, NodeConfig
 from .registry import ModelRegistry
 from .router import pick_endpoint
 
-_config: ClusterConfig | None = None
-_registry = ModelRegistry()
-_api_key: str = ""
-_persist_path: Path = Path.home() / ".local" / "share" / "vllmd" / "registry.json"
+log = logging.getLogger(__name__)
+
+
+class _State:
+    def __init__(self) -> None:
+        self.config: ClusterConfig | None = None
+        self.registry: ModelRegistry = ModelRegistry()
+        self.api_key: str = ""
+        self.persist_path: Path = (
+            Path.home() / ".local" / "share" / "vllmd" / "registry.json"
+        )
+
+
+_state = _State()
 
 
 def _save_registry() -> None:
     with contextlib.suppress(Exception):
-        _persist_path.parent.mkdir(parents=True, exist_ok=True)
-        _persist_path.write_text(json.dumps(_registry.dump(), indent=2))
+        _state.persist_path.parent.mkdir(parents=True, exist_ok=True)
+        _state.persist_path.write_text(json.dumps(_state.registry.dump(), indent=2))
 
 
 def _load_registry() -> None:
     with contextlib.suppress(Exception):
-        data = json.loads(_persist_path.read_text())
-        _registry.load(data)
+        data = json.loads(_state.persist_path.read_text())
+        _state.registry.load(data)
 
 
 def _check_auth(authorization: Annotated[str | None, Header()] = None) -> None:
-    if not _api_key:
+    if not _state.api_key:
         return
-    if authorization != f"Bearer {_api_key}":
+    if authorization != f"Bearer {_state.api_key}":
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -56,9 +67,9 @@ async def _poll_agents() -> None:
     """Background task: refresh registry every 30 s from all agents."""
     while True:
         await asyncio.sleep(30)
-        if _config is None:
+        if _state.config is None:
             continue
-        await _refresh_registry(_config)
+        await _refresh_registry(_state.config)
 
 
 async def _refresh_registry(cfg: ClusterConfig) -> None:
@@ -72,12 +83,13 @@ async def _refresh_registry(cfg: ClusterConfig) -> None:
                     port = c.get("port")
                     if model_id and port:
                         endpoint = f"http://{node.host}:{port}"
-                        _registry.register(model_id, node.name, endpoint)
-                        _registry.mark_healthy(model_id, node.name, True)
+                        _state.registry.register(model_id, node.name, endpoint)
+                        _state.registry.mark_healthy(model_id, node.name, True)
                         changed = True
             except Exception:
+                log.debug("Agent at %s unreachable", node.agent_url, exc_info=True)
                 for spec in cfg.models_for_node(node.name):
-                    _registry.mark_healthy(spec.name, node.name, False)
+                    _state.registry.mark_healthy(spec.name, node.name, False)
                     changed = True
     if changed:
         _save_registry()
@@ -85,13 +97,12 @@ async def _refresh_registry(cfg: ClusterConfig) -> None:
 
 @asynccontextmanager
 async def _lifespan(_application: FastAPI) -> AsyncIterator[None]:
-    global _config
-    if _config is None:
+    if _state.config is None:
         from ..cluster.config import load_cluster_config
 
-        _config = load_cluster_config()
+        _state.config = load_cluster_config()
     _load_registry()
-    await _refresh_registry(_config)
+    await _refresh_registry(_state.config)
     task = asyncio.create_task(_poll_agents())
     try:
         yield
@@ -109,11 +120,11 @@ app = FastAPI(title="vllmd-orchestrator", lifespan=_lifespan)
 
 @app.get("/cluster/status")
 async def cluster_status(_: Auth) -> dict:
-    if _config is None:
+    if _state.config is None:
         raise HTTPException(status_code=503, detail="No cluster config loaded.")
     result = []
-    for node in _config.nodes:
-        async with AgentClient(node.agent_url, _config.api_key) as client:
+    for node in _state.config.nodes:
+        async with AgentClient(node.agent_url, _state.config.api_key) as client:
             try:
                 await client.health()
                 models = await client.list_models()
@@ -126,6 +137,7 @@ async def cluster_status(_: Auth) -> dict:
                     }
                 )
             except Exception:
+                log.debug("Agent at %s unreachable", node.agent_url, exc_info=True)
                 result.append(
                     {
                         "node": node.name,
@@ -135,6 +147,18 @@ async def cluster_status(_: Auth) -> dict:
                     }
                 )
     return {"nodes": result}
+
+
+async def _stop_model_on_node(
+    node: NodeConfig, spec: ModelSpec, cfg: ClusterConfig
+) -> dict:
+    async with AgentClient(node.agent_url, cfg.api_key) as client:
+        try:
+            r = await client.stop_model(spec.name)
+            _state.registry.deregister(spec.name, node.name)
+            return {"node": node.name, "model": spec.name, **r}
+        except Exception as exc:
+            return {"node": node.name, "model": spec.name, "error": str(exc)}
 
 
 async def _start_spec_on_node(
@@ -159,7 +183,7 @@ async def _start_spec_on_node(
                 payload["lora_path"] = spec.lora_path
             result = await client.start_model(spec.name, payload)
             endpoint = f"http://{node.host}:{spec.port}"
-            _registry.register(spec.name, node_name, endpoint)
+            _state.registry.register(spec.name, node_name, endpoint)
             return {"node": node_name, "model": spec.name, **result}
         except Exception as exc:
             return {"node": node_name, "model": spec.name, "error": str(exc)}
@@ -167,11 +191,11 @@ async def _start_spec_on_node(
 
 @app.post("/cluster/up")
 async def cluster_up(_: Auth) -> dict:
-    if _config is None:
+    if _state.config is None:
         raise HTTPException(status_code=503, detail="No cluster config loaded.")
     tasks = [
-        _start_spec_on_node(spec, node_name, _config)
-        for spec in _config.models
+        _start_spec_on_node(spec, node_name, _state.config)
+        for spec in _state.config.models
         for node_name in spec.nodes
     ]
     results = await asyncio.gather(*tasks)
@@ -181,25 +205,15 @@ async def cluster_up(_: Auth) -> dict:
 
 @app.post("/cluster/down")
 async def cluster_down(_: Auth) -> dict:
-    if _config is None:
+    if _state.config is None:
         raise HTTPException(status_code=503, detail="No cluster config loaded.")
     tasks = []
-    for spec in _config.models:
+    for spec in _state.config.models:
         for node_name in spec.nodes:
-            node = _config.node(node_name)
+            node = _state.config.node(node_name)
             if node is None:
                 continue
-
-            async def _stop(n=node, s=spec) -> dict:
-                async with AgentClient(n.agent_url, _config.api_key) as client:
-                    try:
-                        r = await client.stop_model(s.name)
-                        _registry.deregister(s.name, n.name)
-                        return {"node": n.name, "model": s.name, **r}
-                    except Exception as exc:
-                        return {"node": n.name, "model": s.name, "error": str(exc)}
-
-            tasks.append(_stop())
+            tasks.append(_stop_model_on_node(node, spec, _state.config))
     results = await asyncio.gather(*tasks)
     _save_registry()
     return {"results": list(results)}
@@ -207,12 +221,14 @@ async def cluster_down(_: Auth) -> dict:
 
 @app.post("/cluster/up/{model}")
 async def cluster_up_model(model: str, _: Auth) -> dict:
-    if _config is None:
+    if _state.config is None:
         raise HTTPException(status_code=503, detail="No cluster config loaded.")
-    spec = _config.model(model)
+    spec = _state.config.model(model)
     if spec is None:
         raise HTTPException(status_code=404, detail=f"Model '{model}' not in config.")
-    tasks = [_start_spec_on_node(spec, node_name, _config) for node_name in spec.nodes]
+    tasks = [
+        _start_spec_on_node(spec, node_name, _state.config) for node_name in spec.nodes
+    ]
     results = await asyncio.gather(*tasks)
     _save_registry()
     return {"results": list(results)}
@@ -220,27 +236,17 @@ async def cluster_up_model(model: str, _: Auth) -> dict:
 
 @app.post("/cluster/down/{model}")
 async def cluster_down_model(model: str, _: Auth) -> dict:
-    if _config is None:
+    if _state.config is None:
         raise HTTPException(status_code=503, detail="No cluster config loaded.")
-    spec = _config.model(model)
+    spec = _state.config.model(model)
     if spec is None:
         raise HTTPException(status_code=404, detail=f"Model '{model}' not in config.")
     tasks = []
     for node_name in spec.nodes:
-        node = _config.node(node_name)
+        node = _state.config.node(node_name)
         if node is None:
             continue
-
-        async def _stop(n=node, s=spec) -> dict:
-            async with AgentClient(n.agent_url, _config.api_key) as client:
-                try:
-                    r = await client.stop_model(s.name)
-                    _registry.deregister(s.name, n.name)
-                    return {"node": n.name, "model": s.name, **r}
-                except Exception as exc:
-                    return {"node": n.name, "model": s.name, "error": str(exc)}
-
-        tasks.append(_stop())
+        tasks.append(_stop_model_on_node(node, spec, _state.config))
     results = await asyncio.gather(*tasks)
     _save_registry()
     return {"results": list(results)}
@@ -254,10 +260,10 @@ async def cluster_down_model(model: str, _: Auth) -> dict:
 @app.get("/v1/models")
 async def list_models(_: Auth) -> dict:
     seen: dict[str, dict] = {}
-    if _config is None:
+    if _state.config is None:
         return {"object": "list", "data": []}
-    for node in _config.nodes:
-        async with AgentClient(node.agent_url, _config.api_key) as client:
+    for node in _state.config.nodes:
+        async with AgentClient(node.agent_url, _state.config.api_key) as client:
             try:
                 containers = await client.list_models()
                 for c in containers:
@@ -265,7 +271,7 @@ async def list_models(_: Auth) -> dict:
                     if m and m not in seen:
                         seen[m] = {"id": m, "object": "model"}
             except Exception:
-                pass
+                log.debug("Agent at %s unreachable", node.agent_url, exc_info=True)
     return {"object": "list", "data": list(seen.values())}
 
 
@@ -293,7 +299,7 @@ async def _proxy_request(
     if not model:
         raise HTTPException(status_code=400, detail="Missing 'model' field.")
 
-    endpoint = pick_endpoint(model, _registry, node_pin=node_pin)
+    endpoint = pick_endpoint(model, _state.registry, node_pin=node_pin)
 
     target_url = f"{endpoint.endpoint}{path}"
     proxy_headers = {
@@ -354,7 +360,6 @@ async def embeddings(
 
 
 def create_app(config: ClusterConfig) -> FastAPI:
-    global _config, _api_key
-    _config = config
-    _api_key = config.api_key
+    _state.config = config
+    _state.api_key = config.api_key
     return app

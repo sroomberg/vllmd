@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..vectordb.factory import _load_config
+from ..vectordb.factory import load_config
 
 
 @dataclass
@@ -56,7 +56,7 @@ class ClusterConfig:
 
 def load_cluster_config() -> ClusterConfig:
     """Load cluster config from the standard vllmd config files."""
-    raw = _load_config()
+    raw = load_config()
 
     nodes = [
         NodeConfig(

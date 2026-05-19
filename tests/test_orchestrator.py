@@ -157,15 +157,15 @@ def orch_client():
             )
         ],
     )
-    orch_server._config = cfg
-    orch_server._api_key = ""
-    orch_server._registry = ModelRegistry()
+    orch_server._state.config = cfg
+    orch_server._state.api_key = ""
+    orch_server._state.registry = ModelRegistry()
 
     with TestClient(orch_server.app, raise_server_exceptions=True) as c:
         yield c
 
-    orch_server._config = None
-    orch_server._registry = ModelRegistry()
+    orch_server._state.config = None
+    orch_server._state.registry = ModelRegistry()
 
 
 def test_orch_cluster_status(orch_client):
@@ -219,24 +219,24 @@ def test_registry_persistence(tmp_path):
     from vllmd.orchestrator import server as orch_server
 
     persist_file = tmp_path / "registry.json"
-    orch_server._persist_path = persist_file
-    orch_server._registry = ModelRegistry()
-    orch_server._registry.register("llama3", "local", "http://localhost:8001")
+    orch_server._state.persist_path = persist_file
+    orch_server._state.registry = ModelRegistry()
+    orch_server._state.registry.register("llama3", "local", "http://localhost:8001")
 
     orch_server._save_registry()
     assert persist_file.exists()
     data = json.loads(persist_file.read_text())
     assert "llama3" in data
 
-    orch_server._registry = ModelRegistry()
-    assert orch_server._registry.get_endpoints("llama3") == []
+    orch_server._state.registry = ModelRegistry()
+    assert orch_server._state.registry.get_endpoints("llama3") == []
 
     orch_server._load_registry()
-    eps = orch_server._registry.get_endpoints("llama3")
+    eps = orch_server._state.registry.get_endpoints("llama3")
     assert len(eps) == 1
     assert eps[0].endpoint == "http://localhost:8001"
 
-    orch_server._persist_path = (
+    orch_server._state.persist_path = (
         __import__("pathlib").Path.home()
         / ".local"
         / "share"

@@ -24,6 +24,8 @@ def set_runtime(runtime: str) -> None:
         CONTAINER_RUNTIME = runtime
 
 
+_VLLM_CONTAINER_PORT = 8000
+
 MANAGED_LABEL = "com.vllmd.managed"
 MODEL_LABEL = "com.vllmd.model"
 MODEL_PATH_LABEL = "com.vllmd.model_path"
@@ -78,7 +80,7 @@ def _docker(*args: str, capture: bool = False) -> subprocess.CompletedProcess:
     )
 
 
-def _container_exists(name: str) -> bool:
+def container_exists(name: str) -> bool:
     result = subprocess.run(
         [
             CONTAINER_RUNTIME,
@@ -108,11 +110,11 @@ def _wait_ready(endpoint: str, timeout: int = HEALTH_TIMEOUT) -> bool:
 
 def _parse_host_port(ports_str: str) -> int | None:
     """Extract the host port from a Ports string like '0.0.0.0:8001->8000/tcp'."""
-    m = re.search(r":(\d+)->8000", ports_str)
+    m = re.search(rf":(\d+)->{_VLLM_CONTAINER_PORT}", ports_str)
     return int(m.group(1)) if m else None
 
 
-def _detect_lora_rank(lora_path: Path) -> int | None:
+def detect_lora_rank(lora_path: Path) -> int | None:
     """Read the LoRA rank from adapter_config.json, or return None."""
     config_file = lora_path / "adapter_config.json"
     with contextlib.suppress(Exception):
@@ -142,7 +144,7 @@ def build_docker_run_cmd(config: RunConfig) -> list[str]:
         "--name",
         config.container_name,
         "-p",
-        f"{config.port}:8000",
+        f"{config.port}:{_VLLM_CONTAINER_PORT}",
         f"--label={MANAGED_LABEL}=true",
         f"--label={MODEL_LABEL}={config.model_id}",
     ]
@@ -178,7 +180,7 @@ def build_docker_run_cmd(config: RunConfig) -> list[str]:
         "--host",
         "0.0.0.0",
         "--port",
-        "8000",
+        str(_VLLM_CONTAINER_PORT),
     ]
     if config.max_model_len is not None:
         cmd += ["--max-model-len", str(config.max_model_len)]
@@ -197,7 +199,7 @@ def start(config: RunConfig) -> None:
         model_path = config.model_path.resolve()
         if not model_path.exists():
             raise FileNotFoundError(f"Model path not found: {model_path}")
-    if _container_exists(config.container_name):
+    if container_exists(config.container_name):
         raise RuntimeError(
             f"Container '{config.container_name}' already exists. "
             "Stop it first or use a different --name."
@@ -207,7 +209,7 @@ def start(config: RunConfig) -> None:
 
 def stop(name: str) -> None:
     """Stop and remove a named container."""
-    if not _container_exists(name):
+    if not container_exists(name):
         raise RuntimeError(f"No container named '{name}' found.")
     _docker("stop", name)
 
@@ -291,11 +293,11 @@ def status(name: str) -> dict:
 
     if running:
         port_result = subprocess.run(
-            [CONTAINER_RUNTIME, "port", name, "8000"],
+            [CONTAINER_RUNTIME, "port", name, str(_VLLM_CONTAINER_PORT)],
             capture_output=True,
             text=True,
         )
-        port = 8000
+        port = _VLLM_CONTAINER_PORT
         if port_result.returncode == 0:
             binding = port_result.stdout.strip().split(":")[-1]
             with contextlib.suppress(ValueError):
