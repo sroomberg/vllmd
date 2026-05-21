@@ -191,16 +191,34 @@ Available tools:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--model`, `-m` | (required) | Path to the model directory |
+| `--model`, `-m` | (required) | Path to the model directory (or HuggingFace Hub model ID) |
 | `--port`, `-p` | `8000` | Host port for the vLLM API |
 | `--name`, `-n` | `vllmd-<model-dir>` | Docker container name |
 | `--gpu/--no-gpu` | `--gpu` | Enable/disable GPU passthrough |
 | `--dtype` | `auto` | Model dtype (`auto`, `float16`, `bfloat16`, `float32`) |
 | `--max-model-len` | — | Override max context length |
+| `--lora`, `-l` | — | Path to a LoRA adapter directory |
+| `--max-lora-rank` | auto | Max LoRA rank (auto-detected from `adapter_config.json` if omitted) |
+| `--runtime` | `docker` | Container runtime executable (`docker`, `podman`, …) |
 | `--detach`, `-d` | `false` | Start in background |
-| `--wait/--no-wait` | `--wait` | Wait for API to be ready (implies background start) |
+| `--wait/--no-wait` | `--wait` | Wait for API to be ready (requires `--detach`) |
 
 Extra positional arguments are forwarded verbatim to vLLM.
+
+### `agent start`
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--host` | `0.0.0.0` | Bind host |
+| `--port`, `-p` | `7861` | Bind port |
+| `--runtime` | `docker` | Container runtime (`docker`, `podman`, …) |
+
+### `orchestrator start`
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--host` | `0.0.0.0` | Bind host |
+| `--port`, `-p` | `7860` | Bind port |
 
 ## Sessions
 
